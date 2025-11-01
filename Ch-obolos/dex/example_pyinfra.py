@@ -1,109 +1,52 @@
 #!/usr/bin/env python3
-
-from omegaconf import OmegaConf as oc
-from pyinfra.api import State, Config, Inventory, connect
-from pyinfra.connectors.local import LocalConnector
+from omegaconf import OmegaConf
+from pyinfra.api import State, Config, Inventory, connect, FactBase
 from pyinfra.facts.server import Command
-from pyinfra.api.exceptions import PyinfraError
+from pyinfra.connectors.local import LocalConnector
 
-ChObolo = oc.load("custom-plug-dex.yml")
-wntNatPkgs = ChObolo.pacotes
-necessaryPkgs = ChObolo.pacotes_base_override
-bootloader = ChObolo.bootloader
-aurHelper = ChObolo.aur_helpers
+# ------------------- NECESSARY FOR PYINFRA -----------------------
+inventory = Inventory(names_data=(["@local"], {}),)
+config = Config()
+config.connectors = {"@local": (LocalConnector, {})}
+state = State(inventory,config)
+connect.connect_all(state)
+host = state.inventory.get_host("@local")
+# ------------------- NECESSARY FOR PYINFRA -----------------------
+
+# ------------------- GET VALUES -----------------------
+ChObolo = OmegaConf.load("custom-plug-dex.yml")
+basePkgs = list(ChObolo.pacotes
+                + ChObolo.pacotes_base_override
+                + [ChObolo.bootloader]
+                + ChObolo.aur_helpers
+                + [ChObolo.users[0].shell])
+
 wntNotNatPkgs = ChObolo.aur_pkgs
 
-basePkgs = list(wntNatPkgs + necessaryPkgs + [bootloader] + aurHelper)
 
-def fetch_local_packages():
-    """
-    Usa o pyinfra como biblioteca para coletar o Fact PacmanPackages localmente.
-    """
+native = host.get_fact(Command, "pacman -Qqen").strip().splitlines()
+aur = host.get_fact(Command, "pacman -Qqem").strip().splitlines()
 
-    print("Iniciando coleta do Fact PacmanPackages via pyinfra...")
+toRemoveNative = sorted(set(native) - set(basePkgs))
+toRemoveAur = sorted(set(aur) - set(wntNotNatPkgs))
 
-    state = None  # garante que existe para o finally
+toAddNative = sorted(set(basePkgs) - set(native))
+toAddAur = sorted(set(wntNotNatPkgs) - set(aur))
 
-    try:
-        # 1. Criar Inventário com suporte à API nova do pyinfra
-        # Necessary step, creates the inventory with the IPs
-        inventory = Inventory(
-            names_data=(["@local"], {}),
-        )
+print("--- Pacotes nativos a remover ---")
+for pkg in toRemoveNative:
+    print(pkg)
 
-        # 2. Criar configuração e o estado, incluindo o conector local
-        # Necessary steps, makes config an alias+allows to use connectors as an localhost
-        # then, on the state, it passas the connections and the connectors
-        config = Config()
-        config.connectors = {"@local": (LocalConnector, {})}
-        state = State(
-            inventory,
-            config,
-        )
+print("\n--- Pacotes AUR a remover ---")
+for pkg in toRemoveAur:
+    print(pkg)
 
-        # 3. Conectar ao host
-        print("Conectando ao host local...")
-        # Necessary step, connects with the config in state
-        connect.connect_all(state)
+print("\n--- Pacotes nativos a adicionar ---")
+for pkg in toAddNative:
+    print(pkg)
 
-        # 4. Obter o host do inventário
-        # Necessary step, uses the localhost as an host
-        host = state.inventory.get_host("@local")
+print("\n--- Pacotes AUR a remover ---")
+for pkg in toAddAur:
+    print(pkg)
 
-        # 5. Coletar dados via 'pacman -Qqen'
-        print("Coletando pacotes instalados (via pacman -Qqen)...")
-
-        # This allows for quick command inputs
-        raw_output_string = host.get_fact(Command, "pacman -Qqen")
-        raw_output_string_aur = host.get_fact(Command, "pacman -Qqem")
-
-
-        if not raw_output_string:
-            print("Nenhum pacote encontrado.")
-            return
-
-        # 6. Exibir resultado
-        print(f"\n--- Pacotes Nativos e Explícitos que estão excedendo (-Qqen) ---")
-
-        # creates the parsed list
-        packageList = raw_output_string.strip().splitlines()
-        listAur= raw_output_string_aur.strip().splitlines()
-
-        # sorts list
-        packageList.sort()
-        listAur.sort()
-
-        RmvPkgs = list(set(packageList) - set(basePkgs))
-        RmvAurPkgs = list( set(listAur) - set(wntNotNatPkgs))
-
-        for pkg in RmvPkgs:
-            print(pkg)
-
-
-        print(f"\n--- Pacotes Não Nativos e Explícitos que estão excedendo (-Qqem) ---")
-        for pkg in RmvAurPkgs:
-            print(pkg)
-
-        ##print(f"Total: {len(package_list)}\n")
-        ## prints list
-        #for pkg_name in package_list:
-        #    print(pkg_name)
-
-        #print(f"Total aur: {len(list_aur)}\n")
-        #for pkg_name in list_aur:
-        #    print(pkg_name)
-
-    except PyinfraError as e:
-        print(f"[ERRO pyinfra] {e}")
-    except Exception as e:
-        print(f"[ERRO inesperado] {e}")
-    finally:
-        if state:
-            print("\nDesconectando...")
-            # Necessary step, disconnection
-            connect.disconnect_all(state)
-            print("Conexão finalizada.")
-
-
-if __name__ == "__main__":
-    fetch_local_packages()
+connect.disconnect_all(state)
