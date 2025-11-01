@@ -46,6 +46,8 @@ def fetch_local_packages():
 
         # This allows for quick command inputs
         raw_output_string = host.get_fact(Command, "pacman -Qqen")
+        raw_output_string_aur = host.get_fact(Command, "pacman -Qqem")
+
 
         if not raw_output_string:
             print("Nenhum pacote encontrado.")
@@ -56,13 +58,19 @@ def fetch_local_packages():
 
         # creates the parsed list
         package_list = raw_output_string.strip().splitlines()
+        list_aur= raw_output_string_aur.strip().splitlines()
 
         # sorts list
         package_list.sort()
+        list_aur.sort()
 
         print(f"Total: {len(package_list)}\n")
         # prints list
         for pkg_name in package_list:
+            print(pkg_name)
+
+        print(f"Total aur: {len(list_aur)}\n")
+        for pkg_name in list_aur:
             print(pkg_name)
 
     except PyinfraError as e:
