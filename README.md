@@ -25,8 +25,16 @@ time ansible-playbook Ch-obolos/dex/playbook_test.yaml # <~ time got: 2,67s user
 
 time uv run Ch-obolos/dex/example_pyinfra.py # time got: 0,95s user 0,13s system 92% cpu 1,175 total
 
-pyinfra inventory.py Ch-obolos/dex/example_pyinfra.py -vvv -y # time got: 1,11s user 0,17s system 54% cpu 2,337 total
+time pyinfra inventory.py Ch-obolos/dex/example_pyinfra.py -vvv -y # time got: 1,11s user 0,17s system 54% cpu 2,337 total
+
+time uv run example_pyinfra.py # time got: 1,07s user 0,16s system 92% cpu 1,327 total (this was inside of Ch-oblos/dex/)
+
+time ansible-playbook modified-main.yaml --tags pkgs -e @Ch-obolos/dex/custom-plug-dex.yml # Time got: 3,80s user 0,83s system 94% cpu 4,899 total
 ```
+
+> [!NOTE]
+>
+> YO, THIS IS AMAZING. This last run of example_pyinfra.py shows 1.3 seconds to get the full list of packages of my system, get all necessary packages inside of my Ch-obolo file (with OmegaConf) and get the difference between (pkgs for removal) the 2 of them, it's about 5 TIMES faster than the ansible role, plus the way in which to calculate the difference was pretty damn easy, with wayyy less lines than the ansible role
 
 ***An guided arch-installer and declarative system manager***
 

@@ -1,4 +1,5 @@
 [dependency-groups]
 dev = [
+    "omegaconf>=2.3.0",
     "pyinfra>=3.5.1",
 ]

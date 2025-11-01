@@ -1,10 +1,19 @@
 #!/usr/bin/env python3
 
+from omegaconf import OmegaConf as oc
 from pyinfra.api import State, Config, Inventory, connect
 from pyinfra.connectors.local import LocalConnector
 from pyinfra.facts.server import Command
 from pyinfra.api.exceptions import PyinfraError
 
+ChObolo = oc.load("custom-plug-dex.yml")
+wntNatPkgs = ChObolo.pacotes
+necessaryPkgs = ChObolo.pacotes_base_override
+bootloader = ChObolo.bootloader
+aurHelper = ChObolo.aur_helpers
+wntNotNatPkgs = ChObolo.aur_pkgs
+
+basePkgs = list(wntNatPkgs + necessaryPkgs + [bootloader] + aurHelper)
 
 def fetch_local_packages():
     """
@@ -54,24 +63,35 @@ def fetch_local_packages():
             return
 
         # 6. Exibir resultado
-        print(f"\n--- Pacotes Nativos e Explícitos (-Qqen) ---")
+        print(f"\n--- Pacotes Nativos e Explícitos que estão excedendo (-Qqen) ---")
 
         # creates the parsed list
-        package_list = raw_output_string.strip().splitlines()
-        list_aur= raw_output_string_aur.strip().splitlines()
+        packageList = raw_output_string.strip().splitlines()
+        listAur= raw_output_string_aur.strip().splitlines()
 
         # sorts list
-        package_list.sort()
-        list_aur.sort()
+        packageList.sort()
+        listAur.sort()
 
-        print(f"Total: {len(package_list)}\n")
-        # prints list
-        for pkg_name in package_list:
-            print(pkg_name)
+        RmvPkgs = list(set(packageList) - set(basePkgs))
+        RmvAurPkgs = list( set(listAur) - set(wntNotNatPkgs))
 
-        print(f"Total aur: {len(list_aur)}\n")
-        for pkg_name in list_aur:
-            print(pkg_name)
+        for pkg in RmvPkgs:
+            print(pkg)
+
+
+        print(f"\n--- Pacotes Não Nativos e Explícitos que estão excedendo (-Qqem) ---")
+        for pkg in RmvAurPkgs:
+            print(pkg)
+
+        ##print(f"Total: {len(package_list)}\n")
+        ## prints list
+        #for pkg_name in package_list:
+        #    print(pkg_name)
+
+        #print(f"Total aur: {len(list_aur)}\n")
+        #for pkg_name in list_aur:
+        #    print(pkg_name)
 
     except PyinfraError as e:
         print(f"[ERRO pyinfra] {e}")
