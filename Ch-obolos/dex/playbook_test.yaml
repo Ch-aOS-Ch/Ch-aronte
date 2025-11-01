@@ -1,0 +1,20 @@
+- name: tasks
+  hosts: localhost
+  tasks:
+    - name: get pacman packages and put it on a list
+      ansible.builtin.command:
+        cmd: "pacman -Qqen"
+      register: pacman_pkgs
+    - name: get aur packages and put them on a list
+      ansible.builtin.command:
+        cmd: "pacman -Qqem"
+      register: aur_pkgs
+
+    - name: show pacman list
+      ansible.builtin.debug:
+        var: pacman_pkgs
+
+    - name: show aur list
+      ansible.builtin.debug:
+        var: aur_pkgs
+

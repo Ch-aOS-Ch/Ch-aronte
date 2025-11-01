@@ -9,7 +9,20 @@
 
 > [!WARNING]
 >
-> This is the Legacy code, I am currently working on switching both the bash scripts with OmegaConf and ansible playbooks with pyinfra OR pulumi (considering both).
+> This is the Legacy code, I am currently working on switching both the bash scripts with OmegaConf and ansible playbooks with pyinfra.
+
+> [!NOTE]
+>
+> Findings:
+>
+> Pyinfra is about 3 times faster than ansible for the simple task of getting all pacman native and all pacman non native packages, putting them in a list and printing them.
+>
+> this, along with the fact that it will enable easier logic down the line shows that i really should just use pyinfra (even if it's install method is shitty on arch)
+```bash
+time ansible-playbook Ch-obolos/dex/playbook_test.yaml # <~ time got: 2,67s user 0,45s system 94% cpu 3,294 total
+
+time uv run Ch-obolos/dex/example_pyinfra.py # time got: 0,95s user 0,13s system 92% cpu 1,175 total
+```
 
 ***An guided arch-installer and declarative system manager***
 
