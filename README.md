@@ -30,6 +30,22 @@ time pyinfra inventory.py Ch-obolos/dex/example_pyinfra.py -vvv -y # time got: 1
 time uv run example_pyinfra.py # time got: 1,07s user 0,16s system 92% cpu 1,327 total (this was inside of Ch-oblos/dex/)
 
 time ansible-playbook modified-main.yaml --tags pkgs -e @Ch-obolos/dex/custom-plug-dex.yml # Time got: 3,80s user 0,83s system 94% cpu 4,899 total
+
+# INSTALING/UNINSTALLING AUROR FROM THE AUR WITH Ansible
+# Installing
+time ansible-playbook main.yaml --tags pkgs -e @Ch-obolos/dex/custom-plug-dex.yml # Time got:  10,57s user 4,09s system 80% cpu 18,134 total
+
+# Uninstalling
+time ansible-playbook main.yaml --tags pkgs -e @Ch-obolos/dex/custom-plug-dex.yml # Time got:  7,43s user 1,77s system 50% cpu 18,280 total
+
+# INSTALING/UNINSTALLING AUROR FROM THE AUR WITH Pyinfra
+# Installing
+
+time uv run main.py pkgs users -e Ch-obolos/dex/custom-plug-dex.yml # Time got: 14,56s user 3,99s system 112% cpu 16,524 total (btw, the system got to the point of installing faster, I'll prove it on the next one)
+
+# Uninstalling
+
+time uv run main.py pkgs users -e Ch-obolos/dex/custom-plug-dex.yml # Time got: 1,70s user 0,27s system 48% cpu 4,027 total (this was so fast I honestly thought i had got an error, but it was just actually way too fast)
 ```
 
 > [!NOTE]
