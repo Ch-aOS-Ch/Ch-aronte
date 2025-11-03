@@ -76,7 +76,7 @@
     src: "{{ particoes.disk }}{{ 'p' if 'nvme' in particoes.disk else '' }}{{ item.part }}"
     fstype: "{{ item.type }}"
     state: mounted
-  loop: "{{ particoes.partition
+  loop: "{{ particoes.partitions
             | selectattr('mountpoint', 'defined'
             | selectattr('mountpoint', 'equalto', '/') }}"
   loop_control:
