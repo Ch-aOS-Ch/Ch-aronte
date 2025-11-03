@@ -302,7 +302,6 @@ aur_pkgs:
   - ttc-monocraft
   - tuios-bin
   - velero-bin
-  - auror
   - vencord
   - wallust
   - wlr-layout-ui

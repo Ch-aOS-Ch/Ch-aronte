@@ -57,7 +57,7 @@ def nativeLogic(state, toAddNative, toRemoveNative, skip, dry):
         for pkg in toAddNative:
             print(pkg)
 
-        confirm = "y" if skip else input("Is This correct (Y/n)? ")
+        confirm = "y" if skip else input("\nIs This correct (Y/n)? ")
         if confirm.lower() in ["y", "yes", "", "s", "sim"]:
             print("\nInitiating Native package management...")
             if toAddNative:
@@ -97,7 +97,7 @@ def aurLogic(state, toAddAur, toRemoveAur, aur_helper, skip, dry):
         for pkg in toAddAur:
             print(pkg)
 
-        confirmAur = "y" if skip else input("Is This correct (Y/n)? ")
+        confirmAur = "y" if skip else input("\nIs This correct (Y/n)? ")
         if confirmAur.lower() in ["y", "yes", "", "s", "sim"]:
             if toAddAur:
                 packagesStr = " ".join(toAddAur)
