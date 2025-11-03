@@ -127,16 +127,26 @@ Here's a quick guide to get you started on creating a new role for Ch-aronte.
     *   Import your new role at the top of `main.py`:
         ```python
         from roles.your_role.tasks import your_role
+
         ```
-    *   Add the corresponding `tag` to the `if/elif` block in `main.py`:
+
+    *   Add the corresponding `tag` to the `ROLES_DISPATCHER` block in `main.py`:
         ```python
         #...
-        elif tag == 'your_role':
-            print(f"\n--- Executing Your Role with Ch-obolo: {chobolo_path} ---")
-            your_role.run_your_role(state, host, chobolo_path)
-            print("--- Your Role Finished ---")
+        ROLES_DISPATCHER = {
+          "packages": pkgs_role.run_all_pkg_logic,
+          "your_role": your_role.run_your_role,
+        }
         #...
+
         ```
+
+    *   You can also create aliases for your tags in the `ROLE_ALIASES` block, it should map directly to the dispatcher variable.:
+        ```py
+        ROLE_ALIASES = {
+            "pkgs": "packages",
+            "yrrl": "your_role"
+        }
 
 ## Minimal Example: A 'touch' Role
 Here is a complete, minimal example of a role that creates a directory in `/tmp/`.

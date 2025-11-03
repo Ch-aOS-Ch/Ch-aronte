@@ -8,6 +8,15 @@ from pyinfra.context import ctx_state
 
 from roles.pkgs.tasks import pkgs as pkgs_role
 
+ROLE_ALIASES = {
+    "pkgs": "packages",
+    "usr": "users"
+}
+
+ROLES_DISPATCHER = {
+    "packages": pkgs_role.run_all_pkg_logic,
+}
+
 def main():
     parser = argparse.ArgumentParser(description="Pyinfra Ch-aronte orquestrator.")
     parser.add_argument('tags', nargs='+', help="The tag(s) for the role(s) to be executed(ex: pkgs, users).")
@@ -31,17 +40,13 @@ def main():
 
     # --- Role orchestration ---
     for tag in args.tags:
-        if tag == 'pkgs':
-            print(f"\n--- Executing packages role with Ch-obolo: {chobolo_path} ---")
-            pkgs_role.run_all_pkg_logic(state, host, chobolo_path)
-            print("--- Packages role finalized. ---")
-        # Example for more roles:
-        # elif tag == 'users':
-        #     print(f"\n--- Executando a Role de Usuários com o Ch-obolo: {chobolo_path} ---")
-        #     users_role.run_all_users_logic(state, host, chobolo_path)
-        #     print("--- Role de Usuários Finalizada ---")
+        normalized_tag = ROLE_ALIASES.get(tag,tag)
+        if normalized_tag in ROLES_DISPATCHER:
+                print(f"\n--- Executing {normalized_tag} role with Ch-obolo: {chobolo_path} ---")
+                ROLES_DISPATCHER[normalized_tag](state, host, chobolo_path)
+                print(f"--- '{normalized_tag}' role finalized. ---")
         else:
-            logging.warning(f"Uknown tag '{tag}'. Skipping.")
+            logging.warning(f"Unknown tag '{normalized_tag}'. Skipping.")
 
     # --- Desconexão ---
     print("\nDisconnecting...")

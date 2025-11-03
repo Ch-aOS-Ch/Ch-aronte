@@ -33,6 +33,7 @@ pacotes:
   - brightnessctl
   - btop
   - cachyos-keyring
+  - blanket
   - cachyos-mirrorlist
   - cachyos-v3-mirrorlist
   - cachyos-v4-mirrorlist
