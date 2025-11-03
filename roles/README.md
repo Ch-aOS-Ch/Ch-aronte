@@ -2,9 +2,13 @@
 
 ## TLDR:
 `State`: Pyinfra session where all of your op's go.
+
 `op`: Declarative operations from pyinfra.
+
 `add_op()`: `op` pile made to be ran with `run_ops()`
+
 why?: Cause pyinfra is significantly faster than ansible, and it allows for the use of python's ecosystem.
+
 USE THE PYINFRA API, _NOT_ THE BINARY.
 
 ----
