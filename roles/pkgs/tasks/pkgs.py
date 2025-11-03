@@ -10,8 +10,13 @@ def pkgLogic(host, chobolo_path):
     """Get the packages delta"""
     ChObolo = OmegaConf.load(chobolo_path)
     aur_helper = ChObolo.aur_helpers[0] if ChObolo.aur_helpers else None
+    necessaries = ["linux", "linux-firmware", "linux-headers", "base", "base-devel", "nano", "networkmanager", "openssh", "git", "ansible", "arch-install-scripts", "sops"]
+    if ChObolo.pacotes_base_override:
+        necessaries = ChObolo.pacotes_base_override
 
-    basePkgs = list(ChObolo.pacotes + ChObolo.pacotes_base_override + [user.shell for user in ChObolo.users if 'shell' in user])
+    basePkgs = list(ChObolo.pacotes + necessaries + [user.shell for user in ChObolo.users if 'shell' in user])
+
+    # ------------------------------ package appends ------------------------------
     if aur_helper:
         basePkgs.append(aur_helper)
 
@@ -37,6 +42,11 @@ def pkgLogic(host, chobolo_path):
     dependencies = host.get_fact(Command, "pacman -Qqdn").strip().splitlines()
     aur = host.get_fact(Command, "pacman -Qqem").strip().splitlines()
     aurDependencies= host.get_fact(Command, "pacman -Qqdm").strip().splitlines()
+
+    if aur_helper in aur or aur_helper in native:
+        aur_helper = aur_helper
+    else:
+        aur_helper = None
 
     toRemoveNative = sorted(set(native) - set(basePkgs))
     toRemoveAur = sorted(set(aur) - set(wntNotNatPkgs))
@@ -118,7 +128,7 @@ def aurLogic(state, toAddAur, toRemoveAur, aur_helper, skip, dry):
                     name="Uninstalling AUR packages.",
                 )
     elif aur_work_to_do and not aur_helper:
-        print("\nThere ARE aur packages to be managed, but you still don't have an AUR helper.\n run python3 main.py aur -e path/to/ch-obolo to manage your aur helpers.")
+        print("\nThere ARE aur packages to be managed, but you still don't have an AUR helper.\nIf you have declared an AUR helper run python3 main.py aur -e path/to/ch-obolo to manage your aur helpers.\nIf you have an AUR helper, declare it under aur_helpers")
     else:
         print("\nNo AUR packages to be managed.")
 
