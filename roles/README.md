@@ -355,7 +355,7 @@ def run_all_pkg_logic(state, host, chobolo_path, skip, dry):
 
 > [!NOTE] to: self
 >
-> use `systemctl list-unit-files --type=service --state=enabled | grep -v "/lib/systemd/system"` + removal of "systemd-timesyncd" and "getty" from this list to manage services in a non hardcoded way
+> use `systemctl list-unit-files --type=service --state=enabled | grep -v "/lib/systemd/system" | grep -Ev 'getty|timesyncd|UNIT|unit' | awk '{print $1}'`to manage services in a non hardcoded way
 >
 > use
 ```bash
