@@ -359,5 +359,5 @@ def run_all_pkg_logic(state, host, chobolo_path, skip, dry):
 >
 > use
 ```bash
-awk -F: '(($3>=1000)||($3==0))&&($1!="nobody"){print $1}' /etc/passwd to manage users faster
+awk -F: '(($3>=1000)||($3==0))&&($1!="nobody"){print $1}' /etc/passwd # to manage users faster
 ```
