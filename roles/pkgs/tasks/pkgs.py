@@ -56,7 +56,7 @@ def pkgLogic(host, chobolo_path):
 
     return toAddNative, toRemoveNative, toAddAur, toRemoveAur, aur_helper
 
-def nativeLogic(state, toAddNative, toRemoveNative, skip, dry):
+def nativeLogic(state, toAddNative, toRemoveNative, skip):
     """Applies changes to Native packages""" # <~ Btw, I'm using """ here cause it get's a better highlighting on my screen than #
     if toAddNative or toRemoveNative:
         print("--- Native packages to be removed: ---")
@@ -93,7 +93,7 @@ def nativeLogic(state, toAddNative, toRemoveNative, skip, dry):
     else:
         print("No native packages to be managed.")
 
-def aurLogic(state, toAddAur, toRemoveAur, aur_helper, skip, dry):
+def aurLogic(state, toAddAur, toRemoveAur, aur_helper, skip):
     """Applies AUR changes"""
     aur_work_to_do = toAddAur or toRemoveAur
 
@@ -135,8 +135,8 @@ def aurLogic(state, toAddAur, toRemoveAur, aur_helper, skip, dry):
 def run_all_pkg_logic(state, host, chobolo_path, skip, dry):
     """Point of entry for this role"""
     toAddNative, toRemoveNative, toAddAur, toRemoveAur, aur_helper = pkgLogic(host, chobolo_path)
-    nativeLogic(state, toAddNative, toRemoveNative, skip, dry)
-    aurLogic(state, toAddAur, toRemoveAur, aur_helper, skip, dry)
+    nativeLogic(state, toAddNative, toRemoveNative, skip)
+    aurLogic(state, toAddAur, toRemoveAur, aur_helper, skip)
     if not dry:
         run_ops(state)
     else:
