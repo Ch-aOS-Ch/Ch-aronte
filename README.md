@@ -13,18 +13,18 @@
 
 ***An guided arch-installer and declarative system manager***
 
-***PART OF THE Ch-aOS (Ch-aronte + Ch-imera for nix + Ch-obolos [studying the ideas of an Ch-iron for fedora and an Ch-ronos for debian]) PROJECT SUITE***
+***PART OF THE Ch-aOS (Ch-aronte + Ch-imera for nix + Ch-obolos [studying the ideas of a Ch-iron for fedora and a Ch-ronos for debian]) PROJECT SUITE***
 
 ## Key Features
 
-- **An *guided* instalation process**: Instead of automating everything, the script displays a series of questions and explanations about what it's doing to the reader, they gather information about the _how_ the reader wants their system, it then writes an singular file in yaml –for easy readability– and uses _that_ file to install the system, it is not automated at all (Im working on an automated mode)
+- **An *guided* instalation process**: Instead of automating everything, the script displays a series of questions and explanations about what it's doing to the reader, they gather information about the _how_ the reader wants their system, it then writes a singular file in yaml –for easy readability– and uses _that_ file to install the system, it is not automated at all (Im working on an automated mode)
 - **The plugin –or better yet, Ch-obolos– system**: Akin to nix, the Ch-aOS plugin system is fully declarative, written exclusively in yaml, it helps the user manage their whole entire system with one singular file by using ansible + the (WIP) Ch-imera project will be able to take these plugins and compile them into nixlang, allowing for an easy transition.
 
 ## The Architecture: Orchestrator + Worker
 
 The project uses a hybrid architecture, delegating to different languages their do's and don't's:
 
-* **Shell Script (The Orchestrator)**: Used to gather user input, transform the input into an declarative file and call in–
+* **Shell Script (The Orchestrator)**: Used to gather user input, transform the input into a declarative file and call in–
 * **Ansible (The Worker)**: Used to make sure the system state is the same as the one declared in the Ch-obolo file.
 
 ## Getting Started
@@ -182,7 +182,7 @@ pacotes:
   - starship
   - btop
 
-aur_pkgs: # <~ yeah, I sepparated them, this is a safety net for when you DON'T have an damn aur helper (how could you?)
+aur_pkgs: # <~ yeah, I sepparated them, this is a safety net for when you DON'T have a damn aur helper (how could you?)
   - 1password-cli
   - aurroamer # <~ Highly recommend, very good package
   - aurutils
@@ -229,17 +229,17 @@ repos:
     unstable: false   # Disables the [testing] repositories
   third_party:
     - name: "cachyOS"
-      distribution: "arch" #<~ Allows for quick Ch-imera parsing, it tells it to not use it as an nix repo
+      distribution: "arch" #<~ Allows for quick Ch-imera parsing, it tells it to not use it as a nix repo
       url: "https://mirror.cachyos.org/cachyos-repo.tar.xz"
 
 # Manages dotfiles from git repositories
 dotfiles: # Translatable with Ch-imera with the manager: tag, it will only use the nix manager tho
   - repo: https://github.com/your-user/your-dotfiles.git #<~ To decide how the script will behave, you have 3 options as to how it will work.
     install_command: "your_custom_dotfile_command.sh" # <~ It uses the root of your repo as a base point, so be aware of that.
-    manager: "charonte" # <~ MUTUALLY EXCLUSIVE FROM INSTALL_COMMAND. Options are charonte OR stow (as of now), this allows for using an proper manager, I personally recommend that you use "charonte" since it is modular AND it is declarative.
+    manager: "charonte" # <~ MUTUALLY EXCLUSIVE FROM INSTALL_COMMAND. Options are charonte OR stow (as of now), this allows for using a proper manager, I personally recommend that you use "charonte" since it is modular AND it is declarative.
     # btw, I'm actively using this dotfile manager rn, it is not dangerous.
     links: # <~ this is only available with the charonte manager.
-      - from: "zsh" # <~ this is an _folder_ inside of my dotfiles folder
+      - from: "zsh" # <~ this is a _folder_ inside of my dotfiles folder
         to: . # <~ this is . by default, it takes the home of the first user on the list of users to define which home to go to
         open: true # <~ defines if the script should symlink the files _inside_ the folder _or_ the folder itself.
       - from: "bash"
@@ -251,10 +251,10 @@ dotfiles: # Translatable with Ch-imera with the manager: tag, it will only use t
 
 # Defines disk partitions (usually filled by the interactive script)
 firmware: UEFI
-particoes: # <~ is not and never will be translatable to an configurations.nix :( but it is translatable to an disko.nix :)
+particoes: # <~ is not and never will be translatable to a configurations.nix :( but it is translatable to a disko.nix :)
   disk: "/dev/sdb" # <~ what disk you want to partition into
   partitions:
-    - name: chronos # <~ Ch-aronte uses label for fstab andother things, this changes nothing to your overall experience, but it is an commodity for me
+    - name: chronos # <~ Ch-aronte uses label for fstab andother things, this changes nothing to your overall experience, but it is a commodity for me
       important: boot # <~ Only 4 of these, boot, root, swap and home, it uses this to define how the role should be treated (mainly boot and swap)
       size: 1GB # <~ Use G, MiB might work, but it might not, it's still not well stabilized
       mount_point: "/boot" # <~ required (duh)
