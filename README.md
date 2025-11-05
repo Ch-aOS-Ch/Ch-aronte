@@ -11,6 +11,16 @@
 >
 > This is the Legacy code, I am currently working on switching both the bash scripts with OmegaConf and ansible playbooks with pyinfra.
 
+> [!CAUTION]
+>
+> While this project is a good way to manage your arch system declaratively, and it's it's associated tools are made to effectively _kickstart_ your learning of nix, this project IS NOT and WILL NEVER BE a 1:1 replacement to nix. this is due to the fact that the _models_ of both systems are antithetic, on nix you never ever touch your /etc, on arch is like a common tuesday.
+> 
+> This project is meant to teach the _declarative paradigm_, the way you have to switch mentalities when installing packages, or managing services.
+>
+> Ch-imera (in the future) will be able to translate your Ch-obolos into funcioning configurations.nix's, but it WILL be dumb, it'll not do half of what you'd be able to do with nix.
+>
+> This is effectively a great way to declaratively use arch linux and _train to understand the paradigm_ of nix. 
+
 > [!NOTE]
 >
 > Findings:
