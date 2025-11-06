@@ -21,6 +21,7 @@ plug_name: custom-plug-dex.yml
 
 pacotes:
   - ansible-lint
+  - jrnl
   - argocd
   - atuin
   - baobab
