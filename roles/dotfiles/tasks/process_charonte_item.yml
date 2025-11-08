@@ -13,11 +13,11 @@
 
         - name: "Ensure target directory exists for 'open: true'"
           ansible.builtin.file:
-            path: "/home/{{ users[0].name }}/{{ item.to | default('.') }}"
+            path: "/home/{{ dotfile_item.user }}/{{ item.to | default('.') }}"
             state: directory
             mode: '0755'
           become: true
-          become_user: "{{ users[0].name }}"
+          become_user: "{{ dotfile_item.user }}"
 
         - name: "Initialize list for managed files in open:true item"
           set_fact:
@@ -41,15 +41,15 @@
       block:
         - name: "Check status of destination path"
           ansible.builtin.stat:
-            path: "/home/{{ users[0].name }}/{{ item.to | default(item.from) }}"
+            path: "/home/{{ dotfile_item.user }}/{{ item.to | default(item.from) }}"
           become: true
-          become_user: "{{ users[0].name }}"
+          become_user: "{{ dotfile_item.user }}"
           register: dest_path_stat
 
         - name: "Backup existing directory before creating symlink"
           ansible.builtin.command:
-            cmd: "mv /home/{{ users[0].name }}/{{ item.to
-                                                | default(item.from) }} /home/{{ users[0].name }}/{{ item.to
+            cmd: "mv /home/{{ dotfile_item.user }}/{{ item.to
+                                                | default(item.from) }} /home/{{ dotfile_item.user }}/{{ item.to
                                                 | default(item.from) }}.bak_{{ ansible_date_time.epoch }}"
           when:
             - dest_path_stat.stat.exists
@@ -58,16 +58,16 @@
             - not (dest_path_stat.stat.islnk and dest_path_stat.stat.lnk_target == dotfiles_repo_path + '/' + item.from)
           changed_when: true
           become: true
-          become_user: "{{ users[0].name }}"
+          become_user: "{{ dotfile_item.user }}"
 
         - name: "Create dotfile symlink"
           ansible.builtin.file:
             src: "{{ dotfiles_repo_path }}/{{ item.from }}"
-            path: "/home/{{ users[0].name }}/{{ item.to | default(item.from) }}"
+            path: "/home/{{ dotfile_item.user }}/{{ item.to | default(item.from) }}"
             state: link
             force: true
           become: true
-          become_user: "{{ users[0].name }}"
+          become_user: "{{ dotfile_item.user }}"
 
         - name: "Add open:false item to new repo state"
           set_fact:

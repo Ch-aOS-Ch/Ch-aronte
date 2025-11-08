@@ -6,8 +6,14 @@
     state: present
   become: true
 
+- name: Get system users
+  ansible.builtin.command: >-
+    awk -F: '(($3>=1000)||($3==0))&&($1!="nobody"){print $1}' /etc/passwd
+  register: sys_users
+
 - name: Iterate through dotfiles list
   ansible.builtin.include_tasks: tasks/process_dotfile.yml
   loop: "{{ dotfiles }}"
   loop_control:
     loop_var: dotfile_item
+  when: dotfile_item.user is defined and dotfile_item.user in sys_users.stdout_lines

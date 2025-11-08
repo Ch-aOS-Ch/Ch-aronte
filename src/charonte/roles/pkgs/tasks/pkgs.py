@@ -9,12 +9,17 @@ from pyinfra.facts.server import Command
 def pkgLogic(host, chobolo_path):
     """Get the packages delta"""
     ChObolo = OmegaConf.load(chobolo_path)
-    aur_helper = ChObolo.aur_helpers[0] if ChObolo.aur_helpers else None
-    necessaries = ["linux", "linux-firmware", "linux-headers", "base", "base-devel", "nano", "networkmanager", "openssh", "git", "ansible", "arch-install-scripts", "sops"]
-    if ChObolo.pacotes_base_override:
-        necessaries = ChObolo.pacotes_base_override
+    aur_helper_list = ChObolo.get('aur_helpers', [])
+    aur_helper = aur_helper_list[0] if aur_helper_list else None
+    pkgList = ChObolo.get('pacotes', [])
+    pkgs = pkgList if pkgList else None
 
-    basePkgs = list(ChObolo.pacotes + necessaries + [user.shell for user in ChObolo.users if 'shell' in user])
+    NecOver = ChObolo.get('pacotes_base_override')
+    necessaries = ["linux", "linux-firmware", "linux-headers", "base", "base-devel", "nano", "networkmanager", "openssh", "git", "ansible", "arch-install-scripts", "sops"]
+    if NecOver:
+        necessaries = NecOver
+
+    basePkgs = list(pkgs + necessaries + [user.shell for user in ChObolo.users if 'shell' in user])
 
     # ------------------------------ package appends ------------------------------
     if aur_helper:
@@ -87,7 +92,6 @@ def nativeLogic(state, toAddNative, toRemoveNative, skip):
                     name="Uninstalling packages",
                     packages=toRemoveNative,
                     present=False,
-                    update=True,
                     _sudo=True
                 )
     else:

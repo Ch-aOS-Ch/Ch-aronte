@@ -22,6 +22,7 @@ plug_name: custom-plug-dex.yml
 pacotes:
   - ansible-lint
   - jrnl
+  - prismlauncher
   - argocd
   - atuin
   - baobab
@@ -276,7 +277,7 @@ aur_pkgs:
   - icat
   - kind
   - localsend-bin
-  - maplemono-nf-cn-unhinted
+  - maple-mono-nf-cn
   - matugen-bin
   - millennium
   - minecraft-launcher
@@ -370,17 +371,22 @@ particoes:
 dotfiles:
   - repo: "https://github.com/Dexmachi/dotfiles.git"
     manager: charonte
+    user: dexmachina
     links:
-      - from: bash
-        open: true
-
       - from: bookmarks
+        to: .
+
+      - from: .config
+        to: .
+
+      - from: bash
+        to: .
+        open: true
 
       - from: walls
         to: .
         open: true
 
       - from: zsh
+        to: .
         open: true
-
-      - from: .config

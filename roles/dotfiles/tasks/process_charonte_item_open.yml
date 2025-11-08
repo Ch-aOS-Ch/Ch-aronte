@@ -3,13 +3,13 @@
 
 - name: "Set target path for {{ sub_item.path | basename }}"
   set_fact:
-    target_path: "/home/{{ users[0].name }}/{{ item.to | default('.') }}/{{ sub_item.path | basename }}"
+    target_path: "/home/{{ dotfile_item.user }}/{{ item.to | default('.') }}/{{ sub_item.path | basename }}"
 
 - name: "Check status of target path for content symlink"
   ansible.builtin.stat:
     path: "{{ target_path }}"
   become: true
-  become_user: "{{ users[0].name }}"
+  become_user: "{{ dotfile_item.user }}"
   register: target_path_stat
 
 - name: "Backup existing file/dir before creating content symlink"
@@ -22,7 +22,7 @@
     - not (target_path_stat.stat.islnk and target_path_stat.stat.lnk_target == sub_item.path)
   changed_when: true
   become: true
-  become_user: "{{ users[0].name }}"
+  become_user: "{{ dotfile_item.user }}"
 
 - name: "Create content symlink for {{ sub_item.path | basename }}"
   ansible.builtin.file:
@@ -31,7 +31,7 @@
     state: link
     force: true
   become: true
-  become_user: "{{ users[0].name }}"
+  become_user: "{{ dotfile_item.user }}"
 
 - name: "Collect managed file path for open:true item"
   set_fact:
