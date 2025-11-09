@@ -68,10 +68,6 @@ Customize your installation by creating your own presets.
 
 ### Example of a complete file with everything in one:
 ```YAML
-# It's recommended to separate these configurations into different files
-# (e.g., users.yml, packages.yml) and use a main plugin file to import them,
-# but for this example, everything is in one place.
-
 # Defines system users, groups, and hostname
 users:
   - name: "dexmachina"
@@ -223,7 +219,6 @@ region:
 
 ### Modularity + Automation
 - [x] Dotfile Manager integrated with the Plugin System
-- [x] Import system (hell)
 - [ ] B-coin system manager CLI helper.
 
 ### Declarativity
