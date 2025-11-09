@@ -9,55 +9,67 @@ from pyinfra.facts.server import Command
 def pkgLogic(host, chobolo_path):
     """Get the packages delta"""
     ChObolo = OmegaConf.load(chobolo_path)
-    aur_helper_list = ChObolo.get('aur_helpers', [])
+    aur_helper_list = ChObolo.get('aurHelpers', [])
     aur_helper = aur_helper_list[0] if aur_helper_list else None
-    pkgList = ChObolo.get('pacotes', [])
-    pkgs = pkgList if pkgList else None
+    pkgList = ChObolo.get('packages', [])
+    pkgs = pkgList if pkgList else []
 
-    NecOver = ChObolo.get('pacotes_base_override')
+    NecOver = ChObolo.get('baseOverride', [])
     necessaries = ["linux", "linux-firmware", "linux-headers", "base", "base-devel", "nano", "networkmanager", "openssh", "git", "ansible", "arch-install-scripts", "sops"]
     if NecOver:
         necessaries = NecOver
 
-    basePkgs = list(pkgs + necessaries + [user.shell for user in ChObolo.users if 'shell' in user])
+    Users = ChObolo.get('users', [])
+
+    basePkgs = list(pkgs + necessaries + [user.shell for user in Users if user and 'shell' in user])
 
     # ------------------------------ package appends ------------------------------
     if aur_helper:
         basePkgs.append(aur_helper)
 
-    root_partition = next((p for p in ChObolo.particoes.partitions if p.get('important') == 'root'), None)
+    Parts = ChObolo.get('particoes', [])
+
+    root_partition = next((p for p in Parts.partitions if Parts and p.get('important') == 'root'), None)
     if root_partition and root_partition.type=="btrfs":
         basePkgs.append("btrfs-progs")
 
-    boot_partition = next((p for p in ChObolo.particoes.partitions if p.get('important') == 'boot'), None)
+    boot_partition = next((p for p in Parts.partitions if Parts and p.get('important') == 'boot'), None)
     if boot_partition:
         basePkgs.append("dosfstools")
 
-    if ChObolo.firmware=="UEFI" and ChObolo.bootloader=="grub":
+    Firm = ChObolo.get('firmware', [])
+    Boot = ChObolo.get('bootloader', [])
+
+    if Firm and Firm=="UEFI" and Boot and Boot=="grub":
         basePkgs.append("efibootmgr")
 
-    if ChObolo.bootloader:
+    if Boot:
         basePkgs.append(ChObolo.bootloader)
     else:
         basePkgs.append("grub")
 
-    wntNotNatPkgs = ChObolo.aur_pkgs
+    aurPkgs = ChObolo.get('aurPackages', [])
 
     native = host.get_fact(Command, "pacman -Qqen").strip().splitlines()
     dependencies = host.get_fact(Command, "pacman -Qqdn").strip().splitlines()
     aur = host.get_fact(Command, "pacman -Qqem").strip().splitlines()
     aurDependencies= host.get_fact(Command, "pacman -Qqdm").strip().splitlines()
 
-    if aur_helper in aur or aur_helper in native:
-        aur_helper = aur_helper
-    else:
-        aur_helper = None
+    if aur_helper:
+        if aur_helper not in aur and aur_helper not in native:
+            aur_helper = None
 
     toRemoveNative = sorted(set(native) - set(basePkgs))
-    toRemoveAur = sorted(set(aur) - set(wntNotNatPkgs))
+    if aurPkgs:
+        toRemoveAur = sorted(set(aur) - set(aurPkgs))
+    else:
+        toRemoveAur = None
 
     toAddNative = sorted(set(basePkgs) - set(native) - set(dependencies))
-    toAddAur = sorted(set(wntNotNatPkgs) - set(aur) - set(aurDependencies))
+    if aurPkgs:
+        toAddAur = sorted(set(aurPkgs) - set(aur) - set(aurDependencies))
+    else:
+        toAddAur = None
 
     return toAddNative, toRemoveNative, toAddAur, toRemoveAur, aur_helper
 
@@ -132,7 +144,7 @@ def aurLogic(state, toAddAur, toRemoveAur, aur_helper, skip):
                     name="Uninstalling AUR packages.",
                 )
     elif aur_work_to_do and not aur_helper:
-        print("\nThere ARE aur packages to be managed, but you still don't have an AUR helper.\nIf you have declared an AUR helper run python3 main.py aur -e path/to/ch-obolo to manage your aur helpers.\nIf you have an AUR helper, declare it under aur_helpers")
+        print("\nThere ARE aur packages to be managed, but you still don't have an AUR helper.\nIf you have declared an AUR helper run python3 main.py aur -e path/to/ch-obolo to manage your aur helpers.\nIf you have an AUR helper, declare it under aurHelpers")
     else:
         print("\nNo AUR packages to be managed.")
 

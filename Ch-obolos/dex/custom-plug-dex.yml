@@ -19,7 +19,7 @@ plug_name: custom-plug-dex.yml
 #   - file: 'dex/region/region.yml'
 #     strategy: override
 
-pacotes:
+packages:
   - ansible-lint
   - hyprtoolkit
   - jrnl
@@ -261,7 +261,7 @@ pacotes:
   - python-omegaconf
   - remmina
 
-aur_pkgs:
+aurPackages:
   - 1password-cli
   - aurroamer
   - aurutils
@@ -305,7 +305,7 @@ aur_pkgs:
   - yaru-icon-theme
   - zsh-abbr
 
-pacotes_base_override:
+baseOverride:
   - linux-cachyos-headers
   - linux-cachyos
   - linux-firmware
@@ -319,6 +319,10 @@ pacotes_base_override:
   - vim
   - vi
   - nano
+
+aurHelpers:
+  - yay
+  - paru
 
 bootloader: grub
 repos:
@@ -344,9 +348,6 @@ repos:
       include: /etc/pacman.d/cachyos-mirrorlist
       distribution: "arch"
 
-aur_helpers:
-  - yay
-  - paru
 
 mirrors:
   countries:
