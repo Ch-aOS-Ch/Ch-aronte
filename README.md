@@ -9,48 +9,7 @@
 
 > [!WARNING]
 >
-> This is the Legacy code, I am currently working on switching both the bash scripts with OmegaConf and ansible playbooks with pyinfra.
-
-> [!NOTE]
->
-> Findings:
->
-> Pyinfra (in API mode) is about 3 times faster than ansible for the simple task of getting all pacman native and all pacman non native packages, putting them in a list and printing them
->
-> Pyinfra in binary mode, however, is slow as balls, taking about 2 seconds for basically the same reason as ansible.
->
-> this, along with the fact that it will enable easier logic down the line shows that i really should just use pyinfra (even if it's install method is shitty on arch)
-```bash
-time ansible-playbook Ch-obolos/dex/playbook_test.yaml # <~ time got: 2,67s user 0,45s system 94% cpu 3,294 total
-
-time uv run Ch-obolos/dex/example_pyinfra.py # time got: 0,95s user 0,13s system 92% cpu 1,175 total
-
-time pyinfra inventory.py Ch-obolos/dex/example_pyinfra.py -vvv -y # time got: 1,11s user 0,17s system 54% cpu 2,337 total
-
-time uv run example_pyinfra.py # time got: 1,07s user 0,16s system 92% cpu 1,327 total (this was inside of Ch-oblos/dex/)
-
-time ansible-playbook modified-main.yaml --tags pkgs -e @Ch-obolos/dex/custom-plug-dex.yml # Time got: 3,80s user 0,83s system 94% cpu 4,899 total
-
-# INSTALING/UNINSTALLING AUROR FROM THE AUR WITH Ansible
-# Installing
-time ansible-playbook main.yaml --tags pkgs -e @Ch-obolos/dex/custom-plug-dex.yml # Time got:  10,57s user 4,09s system 80% cpu 18,134 total
-
-# Uninstalling
-time ansible-playbook main.yaml --tags pkgs -e @Ch-obolos/dex/custom-plug-dex.yml # Time got:  7,43s user 1,77s system 50% cpu 18,280 total
-
-# INSTALING/UNINSTALLING AUROR FROM THE AUR WITH Pyinfra
-# Installing
-
-time uv run main.py pkgs users -e Ch-obolos/dex/custom-plug-dex.yml # Time got: 14,56s user 3,99s system 112% cpu 16,524 total (btw, the system got to the point of installing faster, I'll prove it on the next one)
-
-# Uninstalling
-
-time uv run main.py pkgs users -e Ch-obolos/dex/custom-plug-dex.yml # Time got: 1,70s user 0,27s system 48% cpu 4,027 total (this was so fast I honestly thought i had got an error, but it was just actually way too fast)
-```
-
-> [!NOTE]
->
-> YO, THIS IS AMAZING. This last run of example_pyinfra.py shows 1.3 seconds to get the full list of packages of my system, get all necessary packages inside of my Ch-obolo file (with OmegaConf) and get the difference between (pkgs for removal) the 2 of them, it's about 5 TIMES faster than the ansible role, plus the way in which to calculate the difference was pretty damn easy, with wayyy less lines than the ansible role
+> This is the Legacy code, I am currently working on switching both the bash scripts with OmegaConf and ansible playbooks with pyinfra OR pulumi (considering both).
 
 ***A guided arch-installer and declarative system manager***
 
@@ -58,7 +17,7 @@ time uv run main.py pkgs users -e Ch-obolos/dex/custom-plug-dex.yml # Time got: 
 
 ## Key Features
 
-- **A *guided* instalation process**: Instead of automating everything, the script displays a series of questions and explanations about what it's doing to the reader, they gather information about the _how_ the reader wants their system, it then writes a singular file in yaml –for easy readability– and uses _that_ file to install the system, it is not automated at all (Im working on an automated mode)
+- **An *guided* instalation process**: Instead of automating everything, the script displays a series of questions and explanations about what it's doing to the reader, they gather information about the _how_ the reader wants their system, it then writes a singular file in yaml –for easy readability– and uses _that_ file to install the system, it is not automated at all (Im working on an automated mode)
 - **The plugin –or better yet, Ch-obolos– system**: Akin to nix, the Ch-aOS plugin system is fully declarative, written exclusively in yaml, it helps the user manage their whole entire system with one singular file by using ansible + the (WIP) Ch-imera project will be able to take these plugins and compile them into nixlang, allowing for an easy transition.
 
 ## The Architecture: Orchestrator + Worker
