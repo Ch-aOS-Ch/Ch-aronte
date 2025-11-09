@@ -8,7 +8,7 @@ from pyinfra.api.connect import connect_all, disconnect_all
 from pyinfra.api.state import StateStage, State
 from pyinfra.context import ctx_state
 
-from .roles.pkgs.tasks import pkgs as pkgs_role
+from charonte.roles.pkgs.tasks import pkgs as pkgs_role
 
 ROLE_ALIASES = {
     "pkgs": "packages",
@@ -74,7 +74,7 @@ def main():
     for tag in args.tags:
         normalized_tag = ROLE_ALIASES.get(tag,tag)
         if normalized_tag in ROLES_DISPATCHER:
-                print(f"\n--- Executing {normalized_tag} role with Ch-obolo: {chobolo_path} ---")
+                print(f"\n--- Executing {normalized_tag} role with Ch-obolo: {chobolo_path} ---\n")
                 ROLES_DISPATCHER[normalized_tag](state, host, chobolo_path, skip, drySkip)
                 print(f"\n--- '{normalized_tag}' role finalized. ---")
         else:

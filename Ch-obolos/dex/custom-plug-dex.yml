@@ -21,6 +21,7 @@ plug_name: custom-plug-dex.yml
 
 pacotes:
   - ansible-lint
+  - hyprtoolkit
   - jrnl
   - prismlauncher
   - argocd
@@ -320,10 +321,38 @@ pacotes_base_override:
   - nano
 
 bootloader: grub
+repos:
+  managed:
+    core: true
+    extras: true
+    unstable: false
+
+  third_party:
+    - name: cachyos-core-v3
+      include: /etc/pacman.d/cachyos-v3-mirrorlist
+      distribution: "arch"
+
+    - name: cachyos-extra-v3
+      include: /etc/pacman.d/cachyos-v3-mirrorlist
+      distribution: "arch"
+
+    - name: cachyos-v3
+      include: /etc/pacman.d/cachyos-v3-mirrorlist
+      distribution: "arch"
+
+    - name: cachyos
+      include: /etc/pacman.d/cachyos-mirrorlist
+      distribution: "arch"
 
 aur_helpers:
   - yay
   - paru
+
+mirrors:
+  countries:
+    - "br"
+    - "us"
+  count: 25
 
 users:
   - name: "dexmachina"
