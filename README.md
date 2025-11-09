@@ -208,6 +208,7 @@ region:
 
 # Example of usage:
 ![B-coin usage](./imagens/B-coin-test.gif)
+Note: This GIF shows the new B-coin executor (Pyinfra-based) that is currently under development and not yet fully in the main branch. The installation steps above are for the legacy Ansible version.
 
 ## Project Roadmap
 
