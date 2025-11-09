@@ -59,8 +59,7 @@ def main():
     state.current_stage = StateStage.Prepare
     ctx_state.set(state)
 
-    if not dry:
-        config.SUDO_PASSWORD = getpass.getpass("Sudo password: ")
+    config.SUDO_PASSWORD = getpass.getpass("Sudo password: ")
 
     skip = ikwid
 
