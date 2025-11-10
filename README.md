@@ -147,6 +147,7 @@ repos:
 # Manages dotfiles from git repositories
 dotfiles: # Translatable with Ch-imera with the manager: tag, it will only use the nix manager tho
   - repo: https://github.com/your-user/your-dotfiles.git #<~ To decide how the script will behave, you have 3 options as to how it will work.
+    user: dexmachina # <~ user where the dotfiles will be applied
     install_command: "your_custom_dotfile_command.sh" # <~ It uses the root of your repo as a base point, so be aware of that.
     manager: "charonte" # <~ MUTUALLY EXCLUSIVE FROM INSTALL_COMMAND. Options are charonte OR stow (as of now), this allows for using a proper manager, I personally recommend that you use "charonte" since it is modular AND it is declarative.
     # btw, I'm actively using this dotfile manager rn, it is not dangerous.
