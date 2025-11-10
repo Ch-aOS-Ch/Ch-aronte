@@ -6,9 +6,11 @@ from pyinfra.api.inventory import Inventory
 from pyinfra.api.config import Config
 from pyinfra.api.connect import connect_all, disconnect_all
 from pyinfra.api.state import StateStage, State
+from pyinfra.api.operations import run_ops
 from pyinfra.context import ctx_state
 
 from charonte.roles.pkgs.tasks import pkgs as pkgs_role
+from charonte.roles.users.tasks import users as users_role
 
 ROLE_ALIASES = {
     "pkgs": "packages",
@@ -17,6 +19,7 @@ ROLE_ALIASES = {
 
 ROLES_DISPATCHER = {
     "packages": pkgs_role.run_all_pkg_logic,
+    "users": users_role.run_user_logic,
 }
 
 def main():
@@ -59,8 +62,7 @@ def main():
     state.current_stage = StateStage.Prepare
     ctx_state.set(state)
 
-    if not dry:
-        config.SUDO_PASSWORD = getpass.getpass("Sudo password: ")
+    config.SUDO_PASSWORD = getpass.getpass("Sudo password: ")
 
     skip = ikwid
 
@@ -75,11 +77,15 @@ def main():
         normalized_tag = ROLE_ALIASES.get(tag,tag)
         if normalized_tag in ROLES_DISPATCHER:
                 print(f"\n--- Executing {normalized_tag} role with Ch-obolo: {chobolo_path} ---\n")
-                ROLES_DISPATCHER[normalized_tag](state, host, chobolo_path, skip, drySkip)
+                ROLES_DISPATCHER[normalized_tag](state, host, chobolo_path, skip)
                 print(f"\n--- '{normalized_tag}' role finalized. ---")
         else:
             print(f"\nWARNING: Unknown tag '{normalized_tag}'. Skipping.")
 
+    if not dry:
+        run_ops(state)
+    else:
+        print(f"dry mode active, skipping.")
     # --- Desconexão ---
     print("\nDisconnecting...")
     disconnect_all(state)

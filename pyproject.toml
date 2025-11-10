@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-B-coin = "Ch-aronte.cli:main"
+B-coin = "charonte.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
