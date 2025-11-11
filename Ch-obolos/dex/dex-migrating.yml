@@ -314,3 +314,27 @@ secrets:
   sec_mode: sops
   sec_file: "/home/dexmachina/projetos/Ch-aOS/Ch-aronte/Ch-obolos/dex/secrets_custom-plug-dex.yml"
   sec_sops: "/home/dexmachina/projetos/Ch-aOS/Ch-aronte/Ch-obolos/dex/sops-config.yml"
+
+
+repos:
+  managed:
+    core: true
+    extras: true
+    unstable: false
+
+  third_party:
+    - name: cachyos-core-v3
+      include: /etc/pacman.d/cachyos-v3-mirrorlist
+      distribution: "arch"
+
+    - name: cachyos-extra-v3
+      include: /etc/pacman.d/cachyos-v3-mirrorlist
+      distribution: "arch"
+
+    - name: cachyos-v3
+      include: /etc/pacman.d/cachyos-v3-mirrorlist
+      distribution: "arch"
+
+    - name: cachyos
+      include: /etc/pacman.d/cachyos-mirrorlist
+      distribution: "arch"

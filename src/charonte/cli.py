@@ -11,15 +11,18 @@ from pyinfra.context import ctx_state
 
 from charonte.roles.pkgs.tasks import pkgs as pkgs_role
 from charonte.roles.users.tasks import users as users_role
+from charonte.roles.repos.tasks import repos as repos_role
 
 ROLE_ALIASES = {
     "pkgs": "packages",
-    "usr": "users"
+    "usr": "users",
+    "repos": "repositories",
 }
 
 ROLES_DISPATCHER = {
     "packages": pkgs_role.run_all_pkg_logic,
     "users": users_role.run_user_logic,
+    "repositories": repos_role.run_repo_logic,
 }
 
 def main():
@@ -53,7 +56,6 @@ def main():
     chobolo_path = args.chobolo
     ikwid = args.i_know_what_im_doing
     dry = args.dry
-    drySkip = dry
 
     hosts = ["@local"]
     inventory = Inventory((hosts, {}))
@@ -86,7 +88,7 @@ def main():
         run_ops(state)
     else:
         print(f"dry mode active, skipping.")
-    # --- Desconexão ---
+    # --- Disconnection ---
     print("\nDisconnecting...")
     disconnect_all(state)
     print("Finalized.")
