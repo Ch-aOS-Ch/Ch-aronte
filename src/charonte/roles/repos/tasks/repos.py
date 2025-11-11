@@ -73,7 +73,10 @@ LocalFileSigLevel = Optional
 """
 
 def buildPacmanConf(ChObolo):
-    pacmanConf = [PACMAN_OPTIONS_BLOCK]
+    if not ChObolo.get('config'):
+        pacmanConf = [PACMAN_OPTIONS_BLOCK]
+    else:
+        pacmanConf = [ChObolo.get('config')]
     reposCfg = ChObolo.get('repos',{})
     managed = reposCfg.get('managed', {})
     thirdParty = reposCfg.get('third_party', {})
