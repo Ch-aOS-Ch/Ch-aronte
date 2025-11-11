@@ -104,7 +104,7 @@ def buildPacmanConf(ChObolo):
         if managed.get('unstable', False):
             pacmanConf.append("\n[core-testing]\nInclude=/etc/pacman.d/mirrorlist")
             pacmanConf.append("\n[extra-testing]\nInclude=/etc/pacman.d/mirrorlist")
-            pacmanConf.append("\n[multilibtesting]\nInclude=/etc/pacman.d/mirrorlist")
+            pacmanConf.append("\n[multilib-testing]\nInclude=/etc/pacman.d/mirrorlist")
 
     return "\n".join(pacmanConf)
 
