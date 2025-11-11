@@ -78,8 +78,8 @@ def buildPacmanConf(ChObolo):
         pacmanConf = [PACMAN_OPTIONS_BLOCK]
     else:
         pacmanConf = [reposCfg.get('i_know_exactly_what_im_doing')]
-    managed = reposCfg.get('managed', {})
-    thirdParty = reposCfg.get('third_party', {})
+    managed = reposCfg.get('managed', [])
+    thirdParty = reposCfg.get('third_party', [])
 
     if thirdParty:
         for repo in thirdParty:

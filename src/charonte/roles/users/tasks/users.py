@@ -16,24 +16,26 @@ def userDelta(host, ChObolo):
     # This gets all non system users
     if not ChObolo.get('users'):
         return [], []
-    users_raw = host.get_fact(Command, "awk -F: '($3>=1000 && $7 ~ /(bash|zsh|fish|sh)$/){print $1}' /etc/passwd").strip().splitlines()
+    users_raw_str = host.get_fact(Command, "awk -F: '($3>=1000 && $7 ~ /(bash|zsh|fish|sh)$/){print $1}' /etc/passwd")
+    users_raw = users_raw_str.strip().splitlines() if users_raw_str else []
     users = set(users_raw) - {'nobody'}
 
-    sysUsers = host.get_fact(Command, "awk -F: '($3<1000){print $1}' /etc/passwd").strip().splitlines()
+    sysUsers_raw = host.get_fact(Command, "awk -F: '($3<1000){print $1}' /etc/passwd")
+    sysUsers = sysUsers_raw.strip().splitlines() if sysUsers_raw else []
 
     userList = {user.name for user in ChObolo.users}
 
     toRemove = sorted(users - userList)
     return toRemove, sysUsers
 
-def getUserPass(ChObolo):
+def getUserPass(ChObolo, secFileO, secSopsO):
     secCfg=ChObolo.get('secrets')
     userPass={}
     if not secCfg:
         return userPass
 
     secMode=secCfg.get('sec_mode')
-    secFile=secCfg.get('sec_file')
+    secFile=secFileO if secFileO else secCfg.get('sec_file')
     if not secFile or not secMode:
         return userPass
     if secMode=='sops':
@@ -185,19 +187,19 @@ def manageSudoAccess(state, host, ChObolo):
             _sudo=True
         )
 
-def run_user_logic(state, host, chobolo_path, skip):
+def run_user_logic(state, host, chobolo_path, skip, secrets_file_override, sops_file_override):
     ChObolo = OmegaConf.load(chobolo_path)
 
     toRemove, sysUsers = userDelta(host, ChObolo)
     # We manage all users defined in the config, not just new ones.
     toAdd=[]
-    if ChObolo.users:
-        for user in ChObolo.users:
+    if ChObolo.get('users'):
+        for user in ChObolo.get('users'):
             if user.name not in sysUsers:
                 toAdd.append(user.name)
             else:
                 print(f"cannot manage {user.name}, it is a system user.")
-    userPass = getUserPass(ChObolo)
+    userPass = getUserPass(ChObolo, secrets_file_override, sops_file_override)
 
     manageHostname(state, ChObolo)
     manageSudoAccess(state, host, ChObolo)

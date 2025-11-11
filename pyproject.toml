@@ -19,3 +19,12 @@ B-coin = "charonte.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
+[project.entry-points."charonte.roles"]
+packages     = "charonte.roles.pkgs.tasks.pkgs:run_all_pkg_logic"
+users        = "charonte.roles.users.tasks.users:run_user_logic"
+repositories = "charonte.roles.repos.tasks.repos:run_repo_logic"
+bootloader   = "charonte.roles.bootloader.tasks.bootloader:run_bootloader"
