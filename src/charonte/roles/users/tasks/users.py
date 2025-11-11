@@ -2,7 +2,7 @@
 from omegaconf import OmegaConf
 import yaml
 import subprocess
-import crypt
+from passlib.hash import sha512_crypt
 
 from io import StringIO
 
@@ -106,10 +106,7 @@ def userLogic(state, toRemove, toAdd, skip, ChObolo, userPass):
                         print(f"IF YOU'RE SEEING THIS MESSAGE, IT MEANS {user_details.name}'S PASSWORD FAILED.\nPLEASE READ THE DOCUMENTATION AS TO HOW TO MANAGE YOUR PASSWORDS.")
                     if password and not password.startswith("$"):
                         print(f"WARNING! {user_details.name}'s password is not hashed, hashing the password for security...")
-                        try:
-                            password = crypt.crypt(password, crypt.mksalt(crypt.METHOD_SHA512))
-                        except:
-                            password = crypt.crypt(password)
+                        password = sha512_crypt.hash(password)
                     add_op(
                         state,
                         server.user,
