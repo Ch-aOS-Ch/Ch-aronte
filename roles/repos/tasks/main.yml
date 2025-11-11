@@ -79,8 +79,6 @@
         state: present
       become: true
 
-
-
 # --- Declarative management of third-party repos ---
 - name: Get list of currently enabled repositories
   ansible.builtin.command: "pacman-conf --repo-list"

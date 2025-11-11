@@ -2,7 +2,6 @@
 from omegaconf import OmegaConf
 
 from pyinfra.api.operation import add_op
-from pyinfra.api.operations import run_ops
 from pyinfra.operations import server, pacman
 from pyinfra.facts.server import Command
 
@@ -149,12 +148,8 @@ def aurLogic(state, toAddAur, toRemoveAur, aur_helper, skip):
     else:
         print("\nNo AUR packages to be managed.")
 
-def run_all_pkg_logic(state, host, chobolo_path, skip, dry):
+def run_all_pkg_logic(state, host, chobolo_path, skip):
     """Point of entry for this role"""
     toAddNative, toRemoveNative, toAddAur, toRemoveAur, aur_helper = pkgLogic(host, chobolo_path)
     nativeLogic(state, toAddNative, toRemoveNative, skip)
     aurLogic(state, toAddAur, toRemoveAur, aur_helper, skip)
-    if not dry:
-        run_ops(state)
-    else:
-        print(f"dry mode active, skipping.")

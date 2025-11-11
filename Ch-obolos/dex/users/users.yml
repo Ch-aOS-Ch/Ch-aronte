@@ -12,7 +12,4 @@ users:
 
 wheel_access: true
 hostname: "Dionysus"
-secrets:
-  sec_mode: sops
-  sec_file: "Ch-obolos/dex/secrets_custom-plug-dex.yml"
-  sec_sops: "Ch-obolos/dex/sops-config.yml"
+

@@ -16,4 +16,4 @@
   loop: "{{ dotfiles }}"
   loop_control:
     loop_var: dotfile_item
-  when: dotfile_item.user is defined and dotfile_item.user in sys_users.stdout_lines
+  when: dotfile_item.user is defined and sys_users is defined and dotfile_item.user in sys_users.stdout_lines

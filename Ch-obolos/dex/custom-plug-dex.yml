@@ -358,14 +358,15 @@ mirrors:
 users:
   - name: "dexmachina"
     shell: "zsh"
+    sudo: True
     groups:
       - wheel
       - input
 
-  - name: "root"
-    shell: "bash"
-    groups:
-      - root
+secrets:
+  sec_mode: sops
+  sec_file: "Ch-obolos/dex/secrets_custom-plug-dex.yml"
+  sec_sops: "Ch-obolos/dex/sops-config.yml"
 
 firmware: UEFI
 particoes:
