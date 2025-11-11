@@ -55,7 +55,7 @@ def main():
     )
     parser.add_argument(
         '--set-chobolo', '-chobolo',
-        dest='set_plug_file',
+        dest='set_chobolo_file',
         help="Set and save the default Ch-obolo file path."
     )
     parser.add_argument(
@@ -70,7 +70,7 @@ def main():
     )
     args = parser.parse_args()
     
-    is_setter_mode = any([args.set_plug_file, args.set_secrets_file, args.set_sops_file])
+    is_setter_mode = any([args.set_chobolo_file, args.set_secrets_file, args.set_sops_file])
 
     if is_setter_mode:
         print(f"Saving configuration to {CONFIG_FILE_PATH}...")
@@ -82,9 +82,9 @@ def main():
         else:
             global_config = OmegaConf.create()
             
-        if args.set_plug_file:
-            global_config.plug_file = args.set_plug_file
-            print(f"- Default Ch-obolo set to: {args.set_plug_file}")
+        if args.set_chobolo_file:
+            global_config.chobolo_file = args.set_chobolo_file
+            print(f"- Default Ch-obolo set to: {args.set_chobolo_file}")
         if args.set_secrets_file:
             global_config.secrets_file = args.set_secrets_file
             print(f"- Default secrets file set to: {args.set_secrets_file}")
@@ -117,18 +117,15 @@ def main():
     ikwid = args.i_know_what_im_doing
     dry = args.dry
 
-    hosts = ["@local"]
-    inventory = Inventory((hosts, {}))
-    config = Config()
-    state = State(inventory, config)
-    state.current_stage = StateStage.Prepare
-    ctx_state.set(state)
+    if not args.tags:
+        print('No tags passed.')
+        sys.exit(0)
 
-    global_config = {}
+    global_config = {}
     if os.path.exists(CONFIG_FILE_PATH):
-        global_config = OmegaConf.load(CONFIG_FILE_PATH)
+        global_config = OmegaConf.load(CONFIG_FILE_PATH) or OmegaConf.create()
 
-    chobolo_path = args.chobolo or global_config.get('plug_file')
+    chobolo_path = args.chobolo or global_config.get('chobolo_file')
     secrets_file_override = args.secrets_file_override or global_config.get('secrets_file')
     sops_file_override = args.sops_file_override or global_config.get('sops_config')
 
@@ -136,6 +133,15 @@ def main():
         print("ERRO: Nenhum Ch-obolo encontrado.", file=sys.stderr)
         print("      Use '-e /path/to/file.yml' ou configure um padrão com 'B-coin --set-plug /path/to/file.yml'.", file=sys.stderr)
         sys.exit(1)
+
+    hosts = ["@local"]
+    inventory = Inventory((hosts, {}))
+    config = Config()
+    state = State(inventory, config)
+    state.current_stage = StateStage.Prepare
+    ctx_state.set(state)
+
+    
 
     config.SUDO_PASSWORD = getpass.getpass("Sudo password: ")
 
