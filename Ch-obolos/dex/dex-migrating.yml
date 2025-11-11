@@ -315,6 +315,35 @@ secrets:
   sec_file: "/home/dexmachina/projetos/Ch-aOS/Ch-aronte/Ch-obolos/dex/secrets_custom-plug-dex.yml"
   sec_sops: "/home/dexmachina/projetos/Ch-aOS/Ch-aronte/Ch-obolos/dex/sops-config.yml"
 
+partitioning:
+  disk: "/dev/sdb"
+  partitions:
+    - name: chronos
+      important: boot
+      size: 1GB
+      mount_point: "/boot"
+      part: 1
+      type: vfat
+
+    - name: Moira
+      important: swap
+      size: 4GB
+      part: 2
+      type: linux-swap
+
+    - name: dionysus_root
+      important: root
+      size: 46GB
+      mount_point: "/"
+      part: 3
+      type: ext4
+
+    - name: dionysus_home
+      important: home
+      size: 100%
+      mount_point: "/home"
+      part: 4
+      type: ext4
 
 repos:
   managed:
