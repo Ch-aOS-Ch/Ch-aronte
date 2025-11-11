@@ -130,8 +130,8 @@ def main():
     sops_file_override = args.sops_file_override or global_config.get('sops_config')
 
     if not chobolo_path:
-        print("ERRO: Nenhum Ch-obolo encontrado.", file=sys.stderr)
-        print("      Use '-e /path/to/file.yml' ou configure um padrão com 'B-coin --set-plug /path/to/file.yml'.", file=sys.stderr)
+        print("ERROR: No Ch-obolo passed", file=sys.stderr)
+        print("      Use '-e /path/to/file.yml' or configure a base Ch-obolo with 'B-coin --set-chobolo /path/to/file.yml'.", file=sys.stderr)
         sys.exit(1)
 
     hosts = ["@local"]
