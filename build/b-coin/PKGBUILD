@@ -1,6 +1,6 @@
 # Maintainer: Dexmachi caiorocoli@gmail.com
 pkgname=b-coin
-pkgver=0.0.5-2
+pkgver=0.0.5.2
 pkgrel=1
 pkgdesc="Declarative system manager for Arch Linux."
 arch=('any')
