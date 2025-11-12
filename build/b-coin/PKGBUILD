@@ -32,6 +32,10 @@ package() {
     --isolated \
     --no-build-isolation
 
+  sed -i "s|^home = .*|home = /usr/bin/|" "$_venv_dir/pyvenv.cfg"
+  find "$_venv_dir/bin" -type f -exec sed -i \
+    "1s|^#!.*python.*|#!/opt/b-coin/venv/bin/python|" {} +
+
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 
   install -d "$pkgdir/usr/bin"
