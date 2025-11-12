@@ -1,0 +1,44 @@
+Maintainer: Dexmachi caiorocoli@gmail.com
+pkgname=b-coin
+pkgver=0.0.5
+pkgrel=1
+pkgdesc="Declarative system manager for Arch Linux."
+arch=('any')
+_gitname="Ch-aronte"
+url="https://github.com/Ch-aOS-Ch/Ch-aronte"
+license=('MIT')
+depends=('python')
+makedepends=('python' 'python-pip' 'python-setuptools' 'python-wheel' 'python-pytest')
+source=("${_gitname}-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+check() {
+  cd "$srcdir/${_gitname}-$pkgver"
+  pytest || true
+}
+
+package() {
+  cd "$srcdir/${_gitname}-$pkgver"
+
+  _venv_dir="$pkgdir/opt/b-coin/venv"
+  _venv_pip="$_venv_dir/bin/pip"
+
+  python -m venv "$_venv_dir" --system-site-packages
+
+  PYTHONDONTWRITEBYTECODE=1 "$_venv_pip" install . \
+    --no-cache-dir \
+    --ignore-installed \
+    --no-user \
+    --isolated \
+    --no-build-isolation
+
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+
+  install -d "$pkgdir/usr/bin"
+  cat <<EOF >"$pkgdir/usr/bin/B-coin"
+#!/bin/bash
+# Don't touch
+exec /opt/b-coin/venv/bin/B-coin "\$@"
+EOF
+  chmod +x "$pkgdir/usr/bin/B-coin"
+}
