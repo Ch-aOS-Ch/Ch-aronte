@@ -1,0 +1,169 @@
+# - name: Check for running package managers
+#   ansible.builtin.shell: set -euo pipefail && pgrep -f '(pacman|yay|paru)' || true
+#   register: pkg_running
+#   changed_when: false
+# 
+# - name: Fail if package manager is running
+#   ansible.builtin.fail:
+#     msg: "Package manager is running: {{ pkg_running.stdout_lines }}"
+#   when: pkg_running.stdout != ""
+
+- name: Define final base pkg list (official repos)
+  ansible.builtin.set_fact:
+    pkgs_pacotes_finais: >-
+      {{ (pacotes_base_override | default(necessarios))
+         | union(pacotes | default([]))
+         | union(users | map(attribute='shell') | list)
+         | union(["btrfs-progs"] if (particoes.partitions | selectattr('type', 'equalto', 'btrfs') | list | length > 0) else [])
+         | union(["dosfstools"] if (particoes.partitions | selectattr('important', 'equalto', 'boot') | list | length > 0) else [])
+         | union(["efibootmgr"] if (firmware == "UEFI" and bootloader == "grub"))
+         | union([bootloader] if (bootloader is defined and bootloader|length > 0) else ["grub"])
+         | union([aur_helpers[0]] if (aur_helpers is defined and aur_helpers | length > 0) else []) }}
+
+- name: Define final AUR pkg list (if helpers exist)
+  ansible.builtin.set_fact:
+    pkgs_pacotes_finais_aur: >-
+      {{ (aur_pkgs | default([])) }}
+  when:
+    - aur_helpers is defined
+    - aur_helpers | length > 0
+
+
+- name: Get currently installed official packages
+  shell: pacman -Qqen
+  register: pkgs_pacotes_instalados_raw
+  changed_when: false
+  check_mode: false
+
+- name: Compute official pkgs to remove/install
+  ansible.builtin.set_fact:
+    pkgs_remover: "{{ pkgs_pacotes_instalados_raw.stdout_lines
+                      | difference(pkgs_pacotes_finais) }}"
+    pkgs_instalar: "{{ pkgs_pacotes_finais
+                      | difference(pkgs_pacotes_instalados_raw.stdout_lines) }}"
+
+- name: Show packages to be removed (official)
+  ansible.builtin.debug:
+    msg: "{{ pkgs_remover }}"
+  when: pkgs_remover | length > 0
+
+- name: Confirm removal (official)
+  ansible.builtin.pause:
+    prompt: |
+      The following {{ pkgs_remover|length }} official packages will be **removed**:
+      {{ pkgs_remover }}
+      Type yes/sim to continue:
+  when: pkgs_remover | length > 0
+  register: confirm_official
+  failed_when: confirm_official.user_input not in ['yes', 'sim']
+
+- name: Remove packages (official)
+  community.general.pacman:
+    name: "{{ pkgs_remover }}"
+    state: absent
+  become: true
+  when: pkgs_remover | length > 0
+
+- name: Install packages (official)
+  community.general.pacman:
+    name: "{{ pkgs_instalar }}"
+    state: present
+  become: true
+  when: pkgs_instalar | length > 0
+
+- name: Get currently installed AUR packages
+  command: pacman -Qqem
+  register: pkgs_aur_instalados_raw
+  changed_when: false
+  check_mode: false
+  failed_when: pkgs_aur_instalados_raw.rc != 0 and pkgs_aur_instalados_raw.stderr != ""
+  when:
+    - aur_helpers is defined
+    - aur_helpers | length > 0
+
+- name: Compute AUR pkgs to remove/install
+  ansible.builtin.set_fact:
+    pkgs_remover_aur: "{{ pkgs_aur_instalados_raw.stdout_lines
+                          | difference(pkgs_pacotes_finais_aur) }}"
+    pkgs_instalar_aur: "{{ pkgs_pacotes_finais_aur
+                          | difference(pkgs_aur_instalados_raw.stdout_lines) }}"
+  when:
+    - aur_helpers is defined
+    - aur_helpers | length > 0
+
+- name: Show packages to be removed (AUR)
+  ansible.builtin.debug:
+    msg: "{{ pkgs_remover_aur }}"
+  when:
+    - aur_helpers is defined
+    - aur_helpers | length > 0
+    - pkgs_remover_aur is defined
+    - pkgs_remover_aur | length > 0
+
+- name: Confirm removal (AUR)
+  when:
+    - aur_helpers is defined
+    - aur_helpers | length > 0
+    - pkgs_remover_aur is defined
+    - pkgs_remover_aur | length > 0
+  ansible.builtin.pause:
+    prompt: |
+      The following {{ pkgs_remover_aur|length }} **AUR** packages will be removed:
+      {{ pkgs_remover_aur }}
+      Type yes/sim to continue:
+  register: confirm_aur
+  failed_when: confirm_aur.user_input not in ['yes', 'sim']
+
+- name: Allow managed user to run pacman without a password
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers.d/11-managed-user-nopasswd-pacman
+    line: "{{ users[0].name }} ALL=(ALL) NOPASSWD: /usr/bin/pacman"
+    state: present
+    create: true
+    mode: '0640' # Permissões seguras
+    validate: 'visudo -csf %s' # VITAL: Valida o arquivo antes de salvar
+  when: users is defined and users | length > 0
+  become: true
+
+- name: Remove AUR packages
+  ansible.builtin.command:
+    argv: "{{ [aur_helpers[0], '-Rns', '--noconfirm', '--noprogressbar'] + pkgs_remover_aur }}"
+  register: aur_remove_result
+  become: true
+  become_user: "{{ users[0].name }}"
+  changed_when: "'removing' in aur_remove_result.stdout"
+  environment:
+    HOME: "/home/{{ users[0].name }}"
+    XDG_CACHE_HOME: "/home/{{ users[0].name }}/.cache"
+  when:
+    - aur_helpers is defined
+    - aur_helpers | length > 0
+    - pkgs_remover_aur is defined
+    - pkgs_remover_aur | length > 0
+
+- name: Install AUR packages
+  ansible.builtin.command:
+    argv: "{{ [aur_helpers[0], '-S', '--noconfirm', '--noprogressbar', '--needed'] + pkgs_instalar_aur }}"
+  register: aur_install_result
+  changed_when: "'(Re)installing' in aur_install_result.stdout or 'Installing' in aur_install_result.stdout"
+  become: true
+  become_user: "{{ users[0].name }}"
+  environment:
+    HOME: "/home/{{ users[0].name }}"
+    XDG_CACHE_HOME: "/home/{{ users[0].name }}/.cache"
+  when:
+    - aur_helpers is defined
+    - aur_helpers | length > 0
+    - pkgs_instalar_aur is defined
+    - pkgs_instalar_aur | length > 0
+
+- name: Disallow managed user to run pacman without a password
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers.d/11-managed-user-nopasswd-pacman
+    line: "{{ users[0].name }} ALL=(ALL) NOPASSWD: /usr/bin/pacman"
+    state: absent
+    create: true
+    mode: '0640'
+    validate: 'visudo -csf %s'
+  when: users is defined and users | length > 0
+  become: true

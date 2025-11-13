@@ -1,0 +1,39 @@
+- name: Initialize final configuration with all existing variables
+  ansible.builtin.set_fact:
+    final_config: "{{ hostvars[inventory_hostname] }}"
+
+- name: Process each imported file based on its strategy
+  ansible.builtin.include_tasks: process_import.yml
+  loop: "{{ imports | default([]) }}"
+  loop_control:
+    loop_var: import_item
+
+- name: Find all unique keys that were merged across all imports
+  ansible.builtin.set_fact:
+    all_merged_keys: "{{ (imports | selectattr('strategy', 'equalto', 'merge') | map(attribute='merge_keys') | list | flatten | unique) }}"
+  when: imports is defined
+
+- name: Set final facts for merged lists (e.g., final_pacotes)
+  ansible.builtin.set_fact:
+    "final_{{ item }}": "{{ final_config[item] | default([]) }}"
+  loop: "{{ all_merged_keys | default([]) }}"
+
+- name: Publish final variables for other roles to use
+  ansible.builtin.set_fact:
+    pacotes: "{{ final_config.pacotes | default([]) }}"
+    repos: "{{ final_config.repos | default([]) }}"
+    users: "{{ final_config.users | default([]) }}"
+    services: "{{ final_config.services | default([]) }}"
+    dotfiles: "{{ final_config.dotfiles | default([]) }}"
+    aur_helpers: "{{ final_config.aur_helpers | default([]) }}"
+    hostname: "{{ final_config.hostname | default(omit) }}"
+    wheel_access: "{{ final_config.wheel_access | default(omit) }}"
+    secrets: "{{ final_config.secrets | default(omit) }}"
+    bootloader: "{{ final_config.bootloader | default(omit) }}"
+    particoes: "{{ final_config.particoes | default(omit) }}"
+    region: "{{ final_config.region | default(omit) }}"
+    firmware: "{{ final_config.firmware | default(omit) }}"
+    aur_pkgs: "{{ final_config.aur_pkgs | default(omit) }}"
+    pacotes_base_override: "{{ final_config.pacotes_base_override | default(omit) }}"
+    mirrors: "{{ final_config.mirrors | default(omit) }}"
+
