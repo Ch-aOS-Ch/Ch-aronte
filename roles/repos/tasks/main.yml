@@ -1,0 +1,173 @@
+- name: Declaratively manage all pacman repositories
+  when: repos.managed is defined and ansible_os_family == 'Archlinux'
+  block:
+    - name: "CRITICAL: Wiping /etc/pacman.conf to build declaratively, DO NOT TURN OFF YOUR PC, please"
+      ansible.builtin.copy:
+        content: ""
+        dest: /etc/pacman.conf
+        force: true
+      become: true
+
+    - name: "Add declarative [options] block"
+      ansible.builtin.blockinfile:
+        path: /etc/pacman.conf
+        marker: "# {mark} ANSIBLE MANAGED BLOCK FOR options"
+        block: |
+          [options]
+          #RootDir     = /
+          #DBPath      = /var/lib/pacman/
+          #CacheDir    = /var/cache/pacman/pkg/
+          #LogFile     = /var/log/pacman.log
+          #GPGDir      = /etc/pacman.d/gnupg/
+          #HookDir     = /etc/pacman.d/hooks/
+          HoldPkg     = pacman glibc
+          #XferCommand = /usr/bin/curl -L -C - -f -o %o %u
+          #XferCommand = /usr/bin/wget --passive-ftp -c -O %o %u
+          #CleanMethod = KeepInstalled
+          Architecture = auto
+
+          #IgnorePkg   =
+          #IgnorePkg   =
+          #IgnoreGroup =
+
+          #NoUpgrade   =
+          #NoExtract   =
+
+          # Misc options
+          #UseSyslog
+          Color
+          ILoveCandy
+          #NoProgressBar
+          CheckSpace
+          #VerbosePkgLists
+          ParallelDownloads = 5
+          DownloadUser = alpm
+          #DisableSandbox
+
+          # By default, pacman accepts packages signed by keys that its local keyring
+          # trusts (see pacman-key and its man page), as well as unsigned packages.
+          SigLevel    = Required DatabaseOptional
+          LocalFileSigLevel = Optional
+          #RemoteFileSigLevel = Required
+
+          # NOTE: You must run `pacman-key --init` before first using pacman; the local
+          # keyring can then be populated with the keys of all official Arch Linux
+          # packagers with `pacman-key --populate archlinux`.
+
+          #
+          # REPOSITORIES
+          #   - can be defined here or included from another file
+          #   - pacman will search repositories in the order defined here
+          #   - local/custom mirrors can be added here or in separate files
+          #   - repositories listed first will take precedence when packages
+          #     have identical names, regardless of version number
+          #   - URLs will have $repo replaced by the name of the current repo
+          #   - URLs will have $arch replaced by the name of the architecture
+          #
+          # Repository entries are of the format:
+          #       [repo-name]
+          #       Server = ServerName
+          #       Include = IncludePath
+          #
+          # The header [repo-name] is crucial - it must be present and
+          # uncommented to enable the repo.
+          #
+
+          # The testing repositories are disabled by default. To enable, uncomment the
+          # repo name header and Include lines. You can add preferred servers immediately
+          # after the header, and they will be used before the default mirrors.
+        state: present
+      become: true
+
+# --- Declarative management of third-party repos ---
+- name: Get list of currently enabled repositories
+  ansible.builtin.command: "pacman-conf --repo-list"
+  register: enabled_repos_raw
+  changed_when: false
+  check_mode: false
+
+- name: Create list of enabled repo names
+  ansible.builtin.set_fact:
+    enabled_repos: "{{ enabled_repos_raw.stdout_lines }}"
+
+- name: Create list of all desired repo names
+  ansible.builtin.set_fact:
+    desired_repos: "{{ ( (repos.third_party | default([])) | map(attribute='name') | list ) +
+        ( ['core'] if repos.managed.core | default(true) else [] ) +
+        ( ['extra'] if repos.managed.extras | default(false) else [] ) +
+        ( ['multilib'] if repos.managed.extras | default(false) else [] ) }}"
+
+- name: Determine which repos to add
+  ansible.builtin.set_fact:
+    repos_to_add: "{{ desired_repos | difference(enabled_repos) }}"
+
+- name: Determine which repos to remove
+  ansible.builtin.set_fact:
+    repos_to_remove: "{{ enabled_repos | difference(desired_repos) }}"
+
+- name: Add desired third-party repos to pacman.conf
+  ansible.builtin.blockinfile:
+    path: /etc/pacman.conf
+    marker: "# {mark} ANSIBLE MANAGED BLOCK FOR {{ item.name }}"
+    block: |
+      [{{ item.name }}]
+      {% if item.url is defined %}
+      Server = {{ item.url }}
+      {% endif %}
+      {% if item.include is defined %}
+      Include = {{ item.include }}
+      {% endif %}
+  loop: "{{ repos.third_party
+            | selectattr('name', 'in', repos_to_add)
+            | list }}"
+  loop_control:
+    loop_var: item
+  become: true
+  when: repos.third_party is defined and repos.third_party | length > 0
+
+- name: "Manage 'core' repository state"
+  ansible.builtin.blockinfile:
+    path: /etc/pacman.conf
+    marker: "# {mark} ANSIBLE MANAGED BLOCK FOR core"
+    block: |
+      [core]
+      Include = /etc/pacman.d/mirrorlist
+    state: "{{ 'present' if repos.managed.core | default(true) else 'absent' }}"
+  when: repos.managed is defined and ansible_os_family == 'Archlinux'
+  become: true
+
+- name: "Manage 'extra' repository state"
+  ansible.builtin.blockinfile:
+    path: /etc/pacman.conf
+    marker: "# {mark} ANSIBLE MANAGED BLOCK FOR extra"
+    block: |
+      [extra]
+      Include = /etc/pacman.d/mirrorlist
+    state: "{{ 'present' if repos.managed.extras | default(false) else 'absent' }}"
+  when: repos.managed is defined and ansible_os_family == 'Archlinux'
+  become: true
+
+- name: "Manage 'multilib' repository state"
+  ansible.builtin.blockinfile:
+    path: /etc/pacman.conf
+    marker: "# {mark} ANSIBLE MANAGED BLOCK FOR multilib"
+    block: |
+      [multilib]
+      Include = /etc/pacman.d/mirrorlist
+    state: "{{ 'present' if repos.managed.extras | default(false) else 'absent' }}"
+  when: repos.managed is defined and ansible_os_family == 'Archlinux'
+  become: true
+
+- name: Remove unwanted third-party repos from pacman.conf
+  ansible.builtin.blockinfile:
+    path: /etc/pacman.conf
+    marker: "# {mark} ANSIBLE MANAGED BLOCK FOR {{ item }}"
+    state: absent
+  loop: "{{ repos_to_remove }}"
+  become: true
+
+- name: Ensure pacman cache is up to date after repo changes
+  community.general.pacman:
+    update_cache: true
+  when: repos_to_add | length > 0 or repos_to_remove | length > 0
+  become: true
