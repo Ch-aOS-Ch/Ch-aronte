@@ -29,3 +29,6 @@ src/charonte/roles/bootloader/tasks/__pycache__/bootloader.cpython-313.pyc
 tests/__pycache__/test_cli.cpython-313-pytest-8.4.2.pyc
 tests/__pycache__/test_cli.cpython-313-pytest-9.0.0.pyc
 build/b-coin/*.tar.zst
+src/charonte/roles/aurHelper/tasks/__pycache__
+src/charonte/roles/region/tasks/__pycache__
+src/charonte/roles/services/tasks/__pycache__
