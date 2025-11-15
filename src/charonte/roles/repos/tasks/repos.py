@@ -78,7 +78,7 @@ def buildPacmanConf(ChObolo):
         pacmanConf = [PACMAN_OPTIONS_BLOCK]
     else:
         pacmanConf = [reposCfg.get('i_know_exactly_what_im_doing')]
-    managed = reposCfg.get('managed', [])
+    managed = reposCfg.get('managed', {})
     thirdParty = reposCfg.get('third_party', [])
 
     if thirdParty:
@@ -134,13 +134,6 @@ def run_repo_logic(state, host, chobolo_path, skip):
                     dest="/etc/pacman.conf",
                     _sudo=True,
                     mode="0644"
-                )
-
-                add_op(
-                    state,
-                    pacman.update,
-                    name="Update pacman cache",
-                    _sudo=True
                 )
         else:
             print("Desired state is already current state.")

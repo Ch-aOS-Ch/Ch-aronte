@@ -21,6 +21,20 @@ try:
 except ImportError:
     from importlib_metadata import entry_points
 
+def discoverAliases():
+    discoveredAliases = {}
+    eps = entry_points()
+    if hasattr(eps, "select"):
+        selected = eps.select(group="charonte.aliases")
+    elif isinstance(eps, dict):
+        selected = eps.get("charonte.aliases", [])
+    else:
+        selected = getattr(eps, "get", lambda *_: [])("charonte.aliases", [])
+    for ep in selected:
+        discoveredAliases[ep.name] = ep.value
+
+    return discoveredAliases
+
 def discoverRoles():
     discovered_roles = {}
     eps = entry_points()
@@ -35,18 +49,13 @@ def discoverRoles():
 
     return discovered_roles
 
-ROLE_ALIASES = {
-  "pkgs": "packages",
-  "usr": "users",
-  "repos": "repositories",
-  "boot": "bootloader",
-}
 
 def argParsing():
     parser = argparse.ArgumentParser(description="Ch-aronte orquestrator.")
-    parser.add_argument('tags', nargs='*', help=f"The tag(s) for the role(s) to be executed. Available aliases: {', '.join(ROLE_ALIASES.keys())}")
+    parser.add_argument('tags', nargs='*', help=f"The tag(s) for the role(s) to be executed.")
     parser.add_argument('-e', dest="chobolo", help="Path to Ch-obolo to be used (overrides config file).")
     parser.add_argument('-r', '--roles', action='store_true', help="Check which roles are available.")
+    parser.add_argument('-a', '--aliases', action='store_true', help="Check which aliases are available.")
     parser.add_argument('-ikwid', '-y', '--i-know-what-im-doing', action='store_true', help="I Know What I'm Doing mode, basically skips confirmations, only leaving sudo calls")
     parser.add_argument('--dry', '-d', action='store_true', help="Execute in dry mode.")
     parser.add_argument('-v', action='count', default=0, help="Increase verbosity level. -v for WARNING, -vvv for DEBUG.")
@@ -81,7 +90,6 @@ def argParsing():
     args = parser.parse_args()
     return args
 
-
 def checkRoles(ROLES_DISPATCHER):
     print("Discovered Roles:")
     if not ROLES_DISPATCHER:
@@ -89,6 +97,16 @@ def checkRoles(ROLES_DISPATCHER):
     else:
         for p in ROLES_DISPATCHER:
             print(f"  -{p}")
+    sys.exit(0)
+
+def checkAliases(ROLE_ALIASES):
+    print("Discovered Aliases for Roles:")
+    if not ROLE_ALIASES:
+        print("No aliases found.")
+    else:
+        for p, r in ROLE_ALIASES.items():
+            print(f"\n  -{p} ~> -{r}")
+            print("_____________________________________________")
     sys.exit(0)
 
 def setMode(args):
@@ -106,8 +124,8 @@ def setMode(args):
 
     if args.set_chobolo_file:
         inputPath = Path(args.set_chobolo_file)
-        absolutePath = inputPath.resolve(strict=True)
         try:
+            absolutePath = inputPath.resolve(strict=True)
             global_config.chobolo_file = str(absolutePath)
             print(f"- Default Ch-obolo set to: {args.set_chobolo_file}")
         except FileNotFoundError:
@@ -115,19 +133,19 @@ def setMode(args):
             sys.exit(1)
     if args.set_secrets_file:
         inputPath = Path(args.set_secrets_file)
-        absolutePath = inputPath.resolve(strict=True)
         try:
-            global_config.set_secrets_file = str(absolutePath)
-            print(f"- Default Ch-obolo set to: {args.set_secrets_file}")
+            absolutePath = inputPath.resolve(strict=True)
+            global_config.secrets_file = str(absolutePath)
+            print(f"- Default secrets file set to: {args.set_secrets_file}")
         except FileNotFoundError:
             print(f"ERRO: Arquivo não encontrado em: {inputPath}", file=sys.stderr)
             sys.exit(1)
     if args.set_sops_file:
         inputPath = Path(args.set_sops_file)
-        absolutePath = inputPath.resolve(strict=True)
         try:
-            global_config.set_sops_file = str(absolutePath)
-            print(f"- Default Ch-obolo set to: {args.set_sops_file}")
+            absolutePath = inputPath.resolve(strict=True)
+            global_config.sops_file = str(absolutePath)
+            print(f"- Default sops file set to: {args.set_sops_file}")
         except FileNotFoundError:
             print(f"ERRO: Arquivo não encontrado em: {inputPath}", file=sys.stderr)
             sys.exit(1)
@@ -155,7 +173,7 @@ def handleVerbose(args):
     if log_level:
         logging.basicConfig(level=log_level, format="%(levelname)s: %(message)s")
 
-def handleOrchestration(args, dry, ikwid, ROLES_DISPATCHER):
+def handleOrchestration(args, dry, ikwid, ROLES_DISPATCHER, ROLE_ALIASES=None):
     CONFIG_DIR = os.path.expanduser("~/.config/charonte")
     CONFIG_FILE_PATH = os.path.join(CONFIG_DIR, "config.yml")
     global_config = {}
@@ -164,7 +182,7 @@ def handleOrchestration(args, dry, ikwid, ROLES_DISPATCHER):
 
     chobolo_path = args.chobolo or global_config.get('chobolo_file')
     secrets_file_override = args.secrets_file_override or global_config.get('secrets_file')
-    sops_file_override = args.sops_file_override or global_config.get('sops_config')
+    sops_file_override = args.sops_file_override or global_config.get('sops_file')
 
     if not chobolo_path:
         print("ERROR: No Ch-obolo passed", file=sys.stderr)
@@ -190,11 +208,10 @@ def handleOrchestration(args, dry, ikwid, ROLES_DISPATCHER):
 
     # ----- args -----
     commonArgs = (state, host, chobolo_path, skip)
-    secArgs = (
+    secArgs = commonArgs + (
         secrets_file_override,
         sops_file_override
     )
-    secArgs = commonArgs + secArgs
 
     SEC_HAVING_ROLES={'users','secrets'}
     # --- Role orchestration ---
@@ -203,6 +220,21 @@ def handleOrchestration(args, dry, ikwid, ROLES_DISPATCHER):
         if normalized_tag in ROLES_DISPATCHER:
             if normalized_tag in SEC_HAVING_ROLES:
                 ROLES_DISPATCHER[normalized_tag](*secArgs)
+            elif normalized_tag == 'packages':
+                mode = ''
+                if tag in ['allPkgs', 'packages', 'pkgs']:
+                    mode = 'all'
+                elif tag == 'natPkgs':
+                    mode = 'native'
+                elif tag == 'aurPkgs':
+                    mode = 'aur'
+
+                if mode:
+                    pkgArgs = commonArgs + (mode,)
+                    ROLES_DISPATCHER[normalized_tag](*pkgArgs)
+                else:
+                    print(f"\nWARNING: Could not determine a mode for tag '{tag}'. Skipping.")
+
             else:
                 ROLES_DISPATCHER[normalized_tag](*commonArgs)
             print(f"\n--- '{normalized_tag}' role finalized. ---")
@@ -220,6 +252,7 @@ def handleOrchestration(args, dry, ikwid, ROLES_DISPATCHER):
 
 def main():
     ROLES_DISPATCHER = discoverRoles()
+    ROLE_ALIASES = discoverAliases()
     args = argParsing()
     ikwid = args.i_know_what_im_doing
     dry = args.dry
@@ -227,22 +260,22 @@ def main():
     if args.verbose or args.v>0:
         handleVerbose(args)
 
+    if args.aliases:
+        checkAliases(ROLE_ALIASES)
+
     if args.roles:
         checkRoles(ROLES_DISPATCHER)
-        sys.exit(0)
 
     is_setter_mode = any([args.set_chobolo_file, args.set_secrets_file, args.set_sops_file])
     if is_setter_mode:
         setMode(args)
         sys.exit(0)
 
-
-
     if not args.tags:
         print('No tags passed.')
         sys.exit(0)
     else:
-        handleOrchestration(args, dry, ikwid, ROLES_DISPATCHER)
+        handleOrchestration(args, dry, ikwid, ROLES_DISPATCHER, ROLE_ALIASES)
 
 if __name__ == "__main__":
   main()

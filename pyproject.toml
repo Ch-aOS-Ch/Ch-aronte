@@ -24,10 +24,23 @@ where = ["src"]
 pythonpath = ["src"]
 
 [project.entry-points."charonte.roles"]
-packages     = "charonte.roles.pkgs.tasks.pkgs:run_all_pkg_logic"
+packages     = "charonte.roles.pkgs.tasks.pkgs:main"
 users        = "charonte.roles.users.tasks.users:run_user_logic"
 repositories = "charonte.roles.repos.tasks.repos:run_repo_logic"
 bootloader   = "charonte.roles.bootloader.tasks.bootloader:run_bootloader"
-helper       = "charonte.roles.aurHelper.tasks.helper:run_aur"
-service      = "charonte.roles.services.tasks.services:run_service_logic"
+helpers      = "charonte.roles.aurHelper.tasks.helper:run_aur"
+services     = "charonte.roles.services.tasks.services:run_service_logic"
 region       = "charonte.roles.region.tasks.region:run_region_logic"
+reflector    = "charonte.roles.reflector.tasks.reflector:reflectorLogic"
+
+[project.entry-points."charonte.aliases"]
+allPkgs = "packages"
+all-packages = "packages"
+natPkgs = "packages"
+native-packages = "packages"
+aurPkgs = "packages"
+aur-packages = "packages"
+pkgs = "packages"
+usr = "users"
+repos = "repositories"
+boot = "bootloader"

@@ -5,30 +5,18 @@ from pyinfra.api.operation import add_op
 from pyinfra.operations import server, pacman
 from pyinfra.facts.server import Command
 
-def pkgLogic(host, chobolo_path):
-    """Get the packages delta"""
-    ChObolo = OmegaConf.load(chobolo_path)
-    aur_helper_list = ChObolo.get('aurHelpers', [])
-    aur_helper = aur_helper_list[0] if aur_helper_list else None
-    pkgList = ChObolo.get('packages', [])
-    pkgs = pkgList if pkgList else []
-
-    NecOver = ChObolo.get('baseOverride', [])
+def natPkgLogic(ChObolo, aur_helper_list, native, dependencies):
+    pkgs = ChObolo.get('packages', [])
+    necOver = ChObolo.get('baseOverride', [])
     necessaries = ["linux", "linux-firmware", "linux-headers", "base", "base-devel", "nano", "networkmanager", "openssh", "git", "ansible", "arch-install-scripts", "sops"]
-    if NecOver:
-        necessaries = NecOver
-
+    if necOver:
+        necessaries = necOver
     Users = ChObolo.get('users', [])
-
     basePkgs = list(pkgs + necessaries + [user.shell for user in Users if user and 'shell' in user])
-
-    # ------------------------------ package appends ------------------------------
-    if aur_helper:
-        basePkgs.append(aur_helper)
-
-    Parts = ChObolo.get('particoes', [])
-
-    if hasattr(Parts, 'partitions'):
+    if aur_helper_list:
+        basePkgs.extend(aur_helper_list)
+    Parts = ChObolo.get('partitioning', [])
+    if Parts and hasattr(Parts, 'partitions'):
         root_partition = next((p for p in Parts.partitions if p.get('important') == 'root'), None)
         if root_partition and root_partition.get("type") == "btrfs":
             basePkgs.append("btrfs-progs")
@@ -36,6 +24,7 @@ def pkgLogic(host, chobolo_path):
         boot_partition = next((p for p in Parts.partitions if p.get('important') == 'boot'), None)
         if boot_partition:
             basePkgs.append("dosfstools")
+
 
     Firm = ChObolo.get('firmware', [])
     Boot = ChObolo.get('bootloader', [])
@@ -48,33 +37,25 @@ def pkgLogic(host, chobolo_path):
     else:
         basePkgs.append("grub")
 
-    native = host.get_fact(Command, "pacman -Qqen").strip().splitlines()
-    dependencies = host.get_fact(Command, "pacman -Qqdn").strip().splitlines()
-    aur = host.get_fact(Command, "pacman -Qqem").strip().splitlines()
-    aurDependencies= host.get_fact(Command, "pacman -Qqdm").strip().splitlines()
+    toAddNative = sorted(set(basePkgs) - set(native) - set(dependencies))
+    toRemoveNative = sorted(set(native) - set(basePkgs))
+    return toAddNative, toRemoveNative
 
+def aurPkgLogic(ChObolo, aur_helper, aur, aurDependencies, native):
     if aur_helper:
         if aur_helper not in aur and aur_helper not in native:
             aur_helper = None
-
-    toRemoveNative = sorted(set(native) - set(basePkgs))
-    toAddNative = sorted(set(basePkgs) - set(native) - set(dependencies))
-
     if 'aurPackages' in ChObolo:
         aurPkgs = ChObolo.get('aurPackages') # Key is present, get value
         if aurPkgs is None: # Handles `aurPackages:` or `aurPackages: null`
             aurPkgs = []
         toRemoveAur = sorted(set(aur) - set(aurPkgs))
         toAddAur = sorted(set(aurPkgs) - set(aur) - set(aurDependencies))
-    else:
-        # Key is not in ChObolo, remove all installed AUR packages.
-        toRemoveAur = sorted(aur)
-        toAddAur = []
-
-    return toAddNative, toRemoveNative, toAddAur, toRemoveAur, aur_helper
+        return toAddAur, toRemoveAur, aur_helper
+    return [], [], aur_helper
 
 def nativeLogic(state, toAddNative, toRemoveNative, skip):
-    """Applies changes to Native packages""" # <~ Btw, I'm using """ here cause it get's a better highlighting on my screen than #
+    """Applies changes to Native packages"""
     if toAddNative or toRemoveNative:
         print("--- Native packages to be removed: ---")
         for pkg in toRemoveNative:
@@ -94,7 +75,6 @@ def nativeLogic(state, toAddNative, toRemoveNative, skip):
                     name="Installing packages",
                     packages=toAddNative,
                     present=True,
-                    update=True,
                     _sudo=True
                 )
             if toRemoveNative:
@@ -148,8 +128,35 @@ def aurLogic(state, toAddAur, toRemoveAur, aur_helper, skip):
     else:
         print("\nNo AUR packages to be managed.")
 
-def run_all_pkg_logic(state, host, chobolo_path, skip):
+def run_all_pkg_logic(state, ChObolo, skip, native, dependencies, aur, aurDependencies, aur_helper_list, aur_helper):
     """Point of entry for this role"""
-    toAddNative, toRemoveNative, toAddAur, toRemoveAur, aur_helper = pkgLogic(host, chobolo_path)
+    toAddNative, toRemoveNative = natPkgLogic(ChObolo, aur_helper_list, native, dependencies)
+    toAddAur, toRemoveAur, aur_helper = aurPkgLogic(ChObolo, aur_helper, aur, aurDependencies, native)
     nativeLogic(state, toAddNative, toRemoveNative, skip)
     aurLogic(state, toAddAur, toRemoveAur, aur_helper, skip)
+
+def run_nat_logic(state, ChObolo, skip, native, dependencies, aur_helper_list):
+    toAddNative, toRemoveNative = natPkgLogic(ChObolo, aur_helper_list, native, dependencies)
+    nativeLogic(state, toAddNative, toRemoveNative, skip)
+
+def run_aur_logic(state, ChObolo, skip, aur_helper, aur, native, aurDependencies):
+    toAddAur, toRemoveAur, aur_helper = aurPkgLogic(ChObolo, aur_helper, aur, aurDependencies, native)
+    aurLogic(state, toAddAur, toRemoveAur, aur_helper, skip)
+
+def main(state, host, chobolo_path, skip, mode):
+    ChObolo = OmegaConf.load(chobolo_path)
+    
+    native = host.get_fact(Command, "pacman -Qqen").strip().splitlines()
+    dependencies = host.get_fact(Command, "pacman -Qqdn").strip().splitlines()
+    aur = host.get_fact(Command, "pacman -Qqem").strip().splitlines()
+    aurDependencies= host.get_fact(Command, "pacman -Qqdm").strip().splitlines()
+    aur_helper_list = ChObolo.get('aurHelpers', [])
+    aur_helper = aur_helper_list[0] if aur_helper_list else None
+
+    if mode == "all":
+        run_all_pkg_logic(state, ChObolo, skip, native, dependencies, aur, aurDependencies, aur_helper_list, aur_helper)
+    elif mode == "native":
+        run_nat_logic(state, ChObolo, skip, native, dependencies, aur_helper_list)
+    elif mode == "aur":
+        run_aur_logic(state, ChObolo, skip, aur_helper, aur, native, aurDependencies)
+
