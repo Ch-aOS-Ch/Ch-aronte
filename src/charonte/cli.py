@@ -36,10 +36,13 @@ def discoverRoles():
     return discovered_roles
 
 ROLE_ALIASES = {
-  "pkgs": "packages",
-  "usr": "users",
-  "repos": "repositories",
-  "boot": "bootloader",
+    "allPkgs": "packages",
+    "natPkgs": "packages",
+    "aurPkgs": "packages",
+    "pkgs": "packages",
+    "usr": "users",
+    "repos": "repositories",
+    "boot": "bootloader",
 }
 
 def argParsing():
@@ -106,8 +109,8 @@ def setMode(args):
 
     if args.set_chobolo_file:
         inputPath = Path(args.set_chobolo_file)
-        absolutePath = inputPath.resolve(strict=True)
         try:
+            absolutePath = inputPath.resolve(strict=True)
             global_config.chobolo_file = str(absolutePath)
             print(f"- Default Ch-obolo set to: {args.set_chobolo_file}")
         except FileNotFoundError:
@@ -115,19 +118,19 @@ def setMode(args):
             sys.exit(1)
     if args.set_secrets_file:
         inputPath = Path(args.set_secrets_file)
-        absolutePath = inputPath.resolve(strict=True)
         try:
-            global_config.set_secrets_file = str(absolutePath)
-            print(f"- Default Ch-obolo set to: {args.set_secrets_file}")
+            absolutePath = inputPath.resolve(strict=True)
+            global_config.secrets_file = str(absolutePath)
+            print(f"- Default secrets file set to: {args.set_secrets_file}")
         except FileNotFoundError:
             print(f"ERRO: Arquivo não encontrado em: {inputPath}", file=sys.stderr)
             sys.exit(1)
     if args.set_sops_file:
         inputPath = Path(args.set_sops_file)
-        absolutePath = inputPath.resolve(strict=True)
         try:
-            global_config.set_sops_file = str(absolutePath)
-            print(f"- Default Ch-obolo set to: {args.set_sops_file}")
+            absolutePath = inputPath.resolve(strict=True)
+            global_config.sops_file = str(absolutePath)
+            print(f"- Default sops file set to: {args.set_sops_file}")
         except FileNotFoundError:
             print(f"ERRO: Arquivo não encontrado em: {inputPath}", file=sys.stderr)
             sys.exit(1)
@@ -164,7 +167,7 @@ def handleOrchestration(args, dry, ikwid, ROLES_DISPATCHER):
 
     chobolo_path = args.chobolo or global_config.get('chobolo_file')
     secrets_file_override = args.secrets_file_override or global_config.get('secrets_file')
-    sops_file_override = args.sops_file_override or global_config.get('sops_config')
+    sops_file_override = args.sops_file_override or global_config.get('sops_file')
 
     if not chobolo_path:
         print("ERROR: No Ch-obolo passed", file=sys.stderr)
@@ -190,11 +193,10 @@ def handleOrchestration(args, dry, ikwid, ROLES_DISPATCHER):
 
     # ----- args -----
     commonArgs = (state, host, chobolo_path, skip)
-    secArgs = (
+    secArgs = commonArgs + (
         secrets_file_override,
         sops_file_override
     )
-    secArgs = commonArgs + secArgs
 
     SEC_HAVING_ROLES={'users','secrets'}
     # --- Role orchestration ---
@@ -203,6 +205,21 @@ def handleOrchestration(args, dry, ikwid, ROLES_DISPATCHER):
         if normalized_tag in ROLES_DISPATCHER:
             if normalized_tag in SEC_HAVING_ROLES:
                 ROLES_DISPATCHER[normalized_tag](*secArgs)
+            elif normalized_tag == 'packages':
+                mode = ''
+                if tag in ['allPkgs', 'packages', 'pkgs']:
+                    mode = 'all'
+                elif tag == 'natPkgs':
+                    mode = 'native'
+                elif tag == 'aurPkgs':
+                    mode = 'aur'
+
+                if mode:
+                    pkgArgs = commonArgs + (mode,)
+                    ROLES_DISPATCHER[normalized_tag](*pkgArgs)
+                else:
+                    print(f"\nWARNING: Could not determine a mode for tag '{tag}'. Skipping.")
+
             else:
                 ROLES_DISPATCHER[normalized_tag](*commonArgs)
             print(f"\n--- '{normalized_tag}' role finalized. ---")
