@@ -21,6 +21,20 @@ try:
 except ImportError:
     from importlib_metadata import entry_points
 
+def discoverAliases():
+    discoveredAliases = {}
+    eps = entry_points()
+    if hasattr(eps, "select"):
+        selected = eps.select(group="charonte.aliases")
+    elif isinstance(eps, dict):
+        selected = eps.get("charonte.aliases", [])
+    else:
+        selected = getattr(eps, "get", lambda *_: [])("charonte.aliases", [])
+    for ep in selected:
+        discoveredAliases[ep.name] = ep.value
+
+    return discoveredAliases
+
 def discoverRoles():
     discovered_roles = {}
     eps = entry_points()
@@ -35,21 +49,13 @@ def discoverRoles():
 
     return discovered_roles
 
-ROLE_ALIASES = {
-    "allPkgs": "packages",
-    "natPkgs": "packages",
-    "aurPkgs": "packages",
-    "pkgs": "packages",
-    "usr": "users",
-    "repos": "repositories",
-    "boot": "bootloader",
-}
 
 def argParsing():
     parser = argparse.ArgumentParser(description="Ch-aronte orquestrator.")
-    parser.add_argument('tags', nargs='*', help=f"The tag(s) for the role(s) to be executed. Available aliases: {', '.join(ROLE_ALIASES.keys())}")
+    parser.add_argument('tags', nargs='*', help=f"The tag(s) for the role(s) to be executed.")
     parser.add_argument('-e', dest="chobolo", help="Path to Ch-obolo to be used (overrides config file).")
     parser.add_argument('-r', '--roles', action='store_true', help="Check which roles are available.")
+    parser.add_argument('-a', '--aliases', action='store_true', help="Check which aliases are available.")
     parser.add_argument('-ikwid', '-y', '--i-know-what-im-doing', action='store_true', help="I Know What I'm Doing mode, basically skips confirmations, only leaving sudo calls")
     parser.add_argument('--dry', '-d', action='store_true', help="Execute in dry mode.")
     parser.add_argument('-v', action='count', default=0, help="Increase verbosity level. -v for WARNING, -vvv for DEBUG.")
@@ -84,7 +90,6 @@ def argParsing():
     args = parser.parse_args()
     return args
 
-
 def checkRoles(ROLES_DISPATCHER):
     print("Discovered Roles:")
     if not ROLES_DISPATCHER:
@@ -92,6 +97,16 @@ def checkRoles(ROLES_DISPATCHER):
     else:
         for p in ROLES_DISPATCHER:
             print(f"  -{p}")
+    sys.exit(0)
+
+def checkAliases(ROLE_ALIASES):
+    print("Discovered Aliases for Roles:")
+    if not ROLE_ALIASES:
+        print("No aliases found.")
+    else:
+        for p, r in ROLE_ALIASES.items():
+            print(f"\n  -{p} ~> -{r}")
+            print("_____________________________________________")
     sys.exit(0)
 
 def setMode(args):
@@ -158,7 +173,7 @@ def handleVerbose(args):
     if log_level:
         logging.basicConfig(level=log_level, format="%(levelname)s: %(message)s")
 
-def handleOrchestration(args, dry, ikwid, ROLES_DISPATCHER):
+def handleOrchestration(args, dry, ikwid, ROLES_DISPATCHER, ROLE_ALIASES=None):
     CONFIG_DIR = os.path.expanduser("~/.config/charonte")
     CONFIG_FILE_PATH = os.path.join(CONFIG_DIR, "config.yml")
     global_config = {}
@@ -237,6 +252,7 @@ def handleOrchestration(args, dry, ikwid, ROLES_DISPATCHER):
 
 def main():
     ROLES_DISPATCHER = discoverRoles()
+    ROLE_ALIASES = discoverAliases()
     args = argParsing()
     ikwid = args.i_know_what_im_doing
     dry = args.dry
@@ -244,22 +260,22 @@ def main():
     if args.verbose or args.v>0:
         handleVerbose(args)
 
+    if args.aliases:
+        checkAliases(ROLE_ALIASES)
+
     if args.roles:
         checkRoles(ROLES_DISPATCHER)
-        sys.exit(0)
 
     is_setter_mode = any([args.set_chobolo_file, args.set_secrets_file, args.set_sops_file])
     if is_setter_mode:
         setMode(args)
         sys.exit(0)
 
-
-
     if not args.tags:
         print('No tags passed.')
         sys.exit(0)
     else:
-        handleOrchestration(args, dry, ikwid, ROLES_DISPATCHER)
+        handleOrchestration(args, dry, ikwid, ROLES_DISPATCHER, ROLE_ALIASES)
 
 if __name__ == "__main__":
   main()
