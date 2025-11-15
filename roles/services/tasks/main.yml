@@ -1,0 +1,124 @@
+- name: Define a blacklist of essential system services
+  ansible.builtin.set_fact:
+    services_blacklist:
+      - dbus-broker.service
+      - dbus.service
+      - getty@.service
+      - kmod-static-nodes.service
+      - polkit.service
+      - systemd-binfmt.service
+      - systemd-boot-clear-sysfail.service
+      - systemd-boot-update.service
+      - systemd-confext.service
+      - systemd-fsck-root.service
+      - systemd-fsck@.service
+      - systemd-homed-activate.service
+      - systemd-homed.service
+      - systemd-journal-flush.service
+      - systemd-journald.service
+      - systemd-logind.service
+      - systemd-modules-load.service
+      - systemd-network-generator.service
+      - systemd-networkd-wait-online.service
+      - systemd-networkd.service
+      - systemd-pstore.service
+      - systemd-random-seed.service
+      - systemd-remount-fs.service
+      - systemd-resolved.service
+      - systemd-sysctl.service
+      - systemd-sysext.service
+      - systemd-timesyncd.service
+      - systemd-tmpfiles-setup-dev-early.service
+      - systemd-tmpfiles-setup-dev.service
+      - systemd-tmpfiles-setup.service
+      - systemd-tpm2-clear.service
+      - systemd-udev-load-credentials.service
+      - systemd-udev-trigger.service
+      - systemd-udevd.service
+      - systemd-update-utmp.service
+      - systemd-user-sessions.service
+      - systemd-userdb-load-credentials.service
+      - systemd-userdbd.service
+      - systemd-validatefs@.service
+      - systemd-vconsole-setup.service
+      - user-runtime-dir@.service
+      - user@.service
+
+- name: 1. Get all enabled services
+  ansible.builtin.shell:
+    cmd: "set -euo pipefail && systemctl list-unit-files --type=service --no-pager --no-legend | grep enabled | awk '{print $1}'"
+  register: enabled_services_raw
+  changed_when: false
+  check_mode: false
+
+- name: 2. Apply blacklist
+  ansible.builtin.set_fact:
+    potentially_disablable: "{{ enabled_services_raw.stdout_lines
+                                | difference(services_blacklist) }}"
+
+# - name: "(DEBUG) Potentially disablable services"
+#   ansible.builtin.debug:
+#     var: potentially_disablable
+
+- name: 3. Get all available service names for dense expansion
+  ansible.builtin.shell:
+    cmd: "set -euo pipefail && systemctl list-unit-files --type=service --no-pager --no-legend | awk '{print $1}'"
+  register: all_system_services_raw
+  changed_when: false
+  check_mode: false
+
+- name: 3.1. Initialize expanded list of desired services
+  ansible.builtin.set_fact:
+    expanded_desired_services: []
+
+- name: 3.2. Add expanded dense services to the list
+  ansible.builtin.set_fact:
+    expanded_desired_services: "{{ expanded_desired_services +
+                                    (all_system_services_raw.stdout_lines
+                                    | select('match', '^(' + item.name + ')')
+                                    | list) }}"
+  loop: "{{ services | default([]) }}"
+  when: item.dense_service is defined and item.dense_service
+  loop_control:
+    loop_var: item
+
+- name: 3.3. Add normal services to the list
+  ansible.builtin.set_fact:
+    expanded_desired_services: "{{ expanded_desired_services +
+                                  [item.name
+                                  if item.name.endswith('.service')
+                                  else item.name ~ '.service'] }}"
+  loop: "{{ services | default([]) }}"
+  when: item.dense_service is not defined or not item.dense_service
+  loop_control:
+    loop_var: item
+
+# - name: "(DEBUG) Expanded desired services"
+#   ansible.builtin.debug:
+#     var: expanded_desired_services
+
+- name: 4. Calculate final list of services to disable
+  ansible.builtin.set_fact:
+    services_to_disable: "{{ potentially_disablable
+                             | difference(expanded_desired_services) }}"
+
+# - name: "(DEBUG) Final list of services to disable"
+#   ansible.builtin.debug:
+#     var: services_to_disable
+
+- name: 5. Manage services based on plugin configuration
+  ansible.builtin.include_tasks: manage_service.yml
+  loop: "{{ services | default([]) }}"
+  loop_control:
+    loop_var: service_item
+  vars:
+    all_system_services: "{{ all_system_services_raw.stdout_lines }}"
+
+- name: 6. Disable and stop services that are not in the desired state
+  ansible.builtin.service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  loop: "{{ services_to_disable }}"
+  become: true
+  when: services_to_disable is defined and services_to_disable | length > 0
