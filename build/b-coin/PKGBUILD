@@ -20,29 +20,15 @@ check() {
 package() {
   cd "$srcdir/${_gitname}-$pkgver"
 
-  _venv_dir="$pkgdir/opt/b-coin/venv"
-  _venv_pip="$_venv_dir/bin/pip"
+  python -m venv "$srcdir/pex_venv"
+  local _venv_pip="$srcdir/pex_venv/bin/pip"
+  local _venv_pex="$srcdir/pex_venv/bin/pex"
 
-  python -m venv "$_venv_dir" --system-site-packages
+  "$_venv_pip" install pex
 
-  PYTHONDONTWRITEBYTECODE=1 "$_venv_pip" install . \
-    --no-cache-dir \
-    --ignore-installed \
-    --no-user \
-    --isolated \
-    --no-build-isolation
+  "$_venv_pex" . -c B-coin -o B-coin --inherit-path=fallback
 
-  sed -i "s|^home = .*|home = /usr/bin/|" "$_venv_dir/pyvenv.cfg"
-  find "$_venv_dir/bin" -type f -exec sed -i \
-    "1s|^#!.*python.*|#!/opt/b-coin/venv/bin/python|" {} +
+  install -Dm755 B-coin "$pkgdir/usr/bin/B-coin"
 
-  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
-
-  install -d "$pkgdir/usr/bin"
-  cat <<EOF >"$pkgdir/usr/bin/B-coin"
-#!/bin/bash
-# Don't touch
-exec /opt/b-coin/venv/bin/B-coin "\$@"
-EOF
-  chmod +x "$pkgdir/usr/bin/B-coin"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"}
 }
