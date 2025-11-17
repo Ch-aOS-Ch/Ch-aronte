@@ -97,6 +97,11 @@ def argParsing():
         action='store_true',
         help="Edit the secrets encrypted file using sops. Do not run publicly."
     )
+    parser.add_argument(
+        '-ec', '--edit-chobolo',
+        action='store_true',
+        help="Edit the Ch-obolo file using the default editor."
+    )
     args = parser.parse_args()
     return args
 
@@ -262,60 +267,118 @@ def handleOrchestration(args, dry, ikwid, ROLES_DISPATCHER, ROLE_ALIASES=None):
 def runSopsCheck(sops_file_override, secrets_file_override):
     secretsFile = secrets_file_override
     sopsFile = sops_file_override
+
+    CONFIG_DIR = os.path.expanduser("~/.config/charonte")
+    CONFIG_FILE_PATH = os.path.join(CONFIG_DIR, "config.yml")
+
+    global_config = {} # Inicia vazio
+    if os.path.exists(CONFIG_FILE_PATH):
+        global_config = OmegaConf.load(CONFIG_FILE_PATH) or OmegaConf.create()
+
+    if not secretsFile:
+        secretsFile = global_config.get('secrets_file')
+    if not sopsFile:
+        sopsFile = global_config.get('sops_config')
+
     if not secretsFile or not sopsFile:
-        CONFIG_DIR = os.path.expanduser("~/.config/charonte")
-        CONFIG_FILE_PATH = os.path.join(CONFIG_DIR, "config.yml")
-        cfg = OmegaConf.load(CONFIG_FILE_PATH)
-        ChOboloPath = cfg.get('chobolo_file', None)
-        ChObolo = OmegaConf.load(ChOboloPath).get('secrets', None) if ChOboloPath else None
-        if ChObolo and not secretsFile:
-            secretsFile = ChObolo.get('sec_file', None)
-        if ChObolo and not sopsFile:
-            sopsFile = ChObolo.get('sec_sops', None)
+        ChOboloPath = global_config.get('chobolo_file', None)
+        if ChOboloPath:
+            try:
+                ChObolo = OmegaConf.load(ChOboloPath)
+                secrets_config = ChObolo.get('secrets', None)
+                if secrets_config:
+                    if not secretsFile:
+                        secretsFile = secrets_config.get('sec_file')
+                    if not sopsFile:
+                        sopsFile = secrets_config.get('sec_sops')
+            except Exception as e:
+                print(f"WARNING: Could not load Chobolo fallback '{ChOboloPath}': {e}", file=sys.stderr)
+
     if not secretsFile or not sopsFile:
         print("ERROR: SOPS check requires both secrets file and sops config file paths.", file=sys.stderr)
+        print("       Configure them using 'B-coin -sec' and 'B-coin -sops', or pass them with '-sf' and '-ss'.", file=sys.stderr)
         sys.exit(1)
 
     try:
-        result = subprocess.run(
-            ['sops', '--config', sopsFile, '--decrypt', secretsFile],
-            check=True,
-        )
+        result = subprocess.run(['sops', '--config', sopsFile, '--decrypt', secretsFile], check=True)
+        okCodes= [0,200]
+        if result.returncode not in okCodes:
+            raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
     except subprocess.CalledProcessError as e:
         print("ERROR: SOPS decryption failed.")
         print("Details:", e.stderr)
+        sys.exit(1)
+    except FileNotFoundError:
+        print("ERROR: 'sops' command not found. Please ensure sops is installed and in your PATH.", file=sys.stderr)
         sys.exit(1)
 
 def runSopsEdit(sops_file_override, secrets_file_override):
     secretsFile = secrets_file_override
     sopsFile = sops_file_override
+
+    CONFIG_DIR = os.path.expanduser("~/.config/charonte")
+    CONFIG_FILE_PATH = os.path.join(CONFIG_DIR, "config.yml")
+
+    global_config = {} # Inicia vazio
+    if os.path.exists(CONFIG_FILE_PATH):
+        global_config = OmegaConf.load(CONFIG_FILE_PATH) or OmegaConf.create()
+
+    if not secretsFile:
+        secretsFile = global_config.get('secrets_file')
+    if not sopsFile:
+        sopsFile = global_config.get('sops_config')
+
     if not secretsFile or not sopsFile:
-        CONFIG_DIR = os.path.expanduser("~/.config/charonte")
-        CONFIG_FILE_PATH = os.path.join(CONFIG_DIR, "config.yml")
-        cfg = OmegaConf.load(CONFIG_FILE_PATH)
-        ChOboloPath = cfg.get('chobolo_file', None)
-        ChObolo = OmegaConf.load(ChOboloPath).get('secrets', None) if ChOboloPath else None
-        if ChObolo and not secretsFile:
-            secretsFile = ChObolo.get('sec_file', None)
-        if ChObolo and not sopsFile:
-            sopsFile = ChObolo.get('sec_sops', None)
+        ChOboloPath = global_config.get('chobolo_file', None)
+        if ChOboloPath:
+            try:
+                ChObolo = OmegaConf.load(ChOboloPath)
+                secrets_config = ChObolo.get('secrets', None)
+                if secrets_config:
+                    if not secretsFile:
+                        secretsFile = secrets_config.get('sec_file')
+                    if not sopsFile:
+                        sopsFile = secrets_config.get('sec_sops')
+            except Exception as e:
+                print(f"WARNING: Could not load Chobolo fallback '{ChOboloPath}': {e}", file=sys.stderr)
+
     if not secretsFile or not sopsFile:
         print("ERROR: SOPS check requires both secrets file and sops config file paths.", file=sys.stderr)
+        print("       Configure them using 'B-coin -sec' and 'B-coin -sops', or pass them with '-sf' and '-ss'.", file=sys.stderr)
         sys.exit(1)
 
     try:
-        result = subprocess.run(
-            ['sops', '--config', sopsFile, secretsFile],
-        )
+        result = subprocess.run(['sops', '--config', sopsFile, secretsFile], check=True)
         okCodes= [0,200]
         if result.returncode not in okCodes:
             raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
     except subprocess.CalledProcessError as e:
-        print("ERROR: SOPS editing failed.")
-        print("Details: sops exited with error code", e.returncode)
-        sys.exit(1)
+        sys.exit(0)
     except FileNotFoundError:
         print("ERROR: 'sops' command not found. Please ensure sops is installed and in your PATH.", file=sys.stderr)
+        sys.exit(1)
+
+def runChoboloEdit(chobolo_path):
+    editor = os.getenv('EDITOR', 'nano')
+    if not chobolo_path:
+        CONFIG_DIR = os.path.expanduser("~/.config/charonte")
+        CONFIG_FILE_PATH = os.path.join(CONFIG_DIR, "config.yml")
+        cfg = OmegaConf.load(CONFIG_FILE_PATH)
+        chobolo_path = cfg.get('chobolo_file', None)
+    if chobolo_path:
+        try:
+            result = subprocess.run(
+                [editor, chobolo_path],
+            )
+        except subprocess.CalledProcessError as e:
+            print("ERROR: Ch-obolo editing failed.")
+            print("Details: Editor exited with error code", e.returncode)
+            sys.exit(1)
+        except FileNotFoundError:
+            print(f"ERROR: Editor '{editor}' not found. Please ensure it is installed and in your PATH.", file=sys.stderr)
+            sys.exit(1)
+    else:
+        print("ERROR: No Ch-obolo file configured to edit.", file=sys.stderr)
         sys.exit(1)
 
 def main():
@@ -334,6 +397,10 @@ def main():
 
     if args.edit_sec:
         runSopsEdit(args.sops_file_override, args.secrets_file_override)
+        sys.exit(0)
+
+    if args.edit_chobolo:
+        runChoboloEdit(args.chobolo)
         sys.exit(0)
 
     if args.aliases:
