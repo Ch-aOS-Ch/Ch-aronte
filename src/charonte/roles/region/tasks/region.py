@@ -6,13 +6,22 @@ from pyinfra.facts.server import Command
 from omegaconf import OmegaConf
 from pyinfra.api.operation import add_op
 
-def setTimezone(state, timezone, ntp):
+def isValidTimezone(tz):
+    return re.match(r'^[A-Za-z_]+/[A-Za-z_]+$', tz)
+
+def isValidForConf(value):
+    return '\n' not in value and '\r' not in value
+
+def setTimezoneSecure(state, timezone, ntp):
     if timezone:
+        if not isValidTimezone(timezone):
+            print(f"ERROR: Timezone '{timezone}' is invalid. Aborting.")
+            return
         add_op(
             state,
             server.shell,
             name=f"Set timezone to {timezone}",
-            commands=f"timedatectl set-timezone {timezone}",
+            commands=[['timedatectl', 'set-timezone', timezone]],
             _sudo=True
         )
     if ntp:
@@ -20,7 +29,8 @@ def setTimezone(state, timezone, ntp):
             state,
             server.shell,
             name="Enable NTP",
-            commands=["timedatectl set-ntp true"],
+            commands=[["timedatectl", "set-ntp", "true"]],
+            _sudo=True
         )
 
 def setLocales(state, locales, host):
@@ -33,17 +43,15 @@ def setLocales(state, locales, host):
         return
 
     modifiedContent = originalContent
-    changesMade = False
-
     for locale in locales:
+        if not isValidForConf(locale):
+            print(f"WARNING: Locale '{locale}' contains invalid characters and will be skipped.")
+            continue
         desiredLine = f"{locale} UTF-8"
         regex = re.compile(rf"^\s*#?\s*{re.escape(locale)}\s+UTF-8.*$", re.MULTILINE)
-
         if re.search(rf"^\s*{re.escape(desiredLine)}.*$", modifiedContent, re.MULTILINE):
             continue
-
         newContent, num_subs = regex.subn(desiredLine, modifiedContent)
-
         if num_subs > 0:
             modifiedContent = newContent
         else:
@@ -66,18 +74,25 @@ def setLocales(state, locales, host):
             _sudo=True
         )
 
-def setDefaults(state, locales, keymap):
+def setDefaultsSecure(state, locales, keymap):
     if locales:
+        defaultLocale = locales[0]
+        if not isValidForConf(defaultLocale):
+            print(f"ERROR: Default locale '{defaultLocale}' contains invalid characters. Aborting.")
+            return
         add_op(
             state,
             files.put,
-            name=f"Set default locale as {locales[0]}",
-            src=StringIO(f"LANG={locales[0]}\n"),
+            name=f"Set default locale as {defaultLocale}",
+            src=StringIO(f"LANG={defaultLocale}\n"),
             dest="/etc/locale.conf",
             _sudo=True,
             mode="0644"
         )
     if keymap:
+        if not isValidForConf(keymap):
+            print(f"ERROR: Keymap '{keymap}' contains invalid characters. Aborting.")
+            return
         add_op(
             state,
             files.put,
@@ -88,16 +103,16 @@ def setDefaults(state, locales, keymap):
             mode="0644"
         )
 
-def run_region_logic(state, host, chobolo_path, skip):
+def run_region_logic(state, host, choboloPath, skip):
     try:
-        ChObolo = OmegaConf.load(chobolo_path)
-        region = ChObolo.get('region')
+        chObolo = OmegaConf.load(choboloPath)
+        region = chObolo.get('region')
         locales = region.get('locale')
         keymap = region.get('keymap')
         timezone = region.get('timezone')
         ntp = region.get('ntp')
     except AttributeError as e:
-        print(f"{e} You've probably not set an region block in your chobolo")
+        print(f"{e} You've probably not set a region block in your chobolo")
         sys.exit(0)
 
     print("\n--- Declared state ---")
@@ -107,14 +122,14 @@ def run_region_logic(state, host, chobolo_path, skip):
         print(f"keymap: {keymap}")
     if timezone:
         print(f"timezone: {timezone}")
-    if locales or timezone or keymap or ntp:
-        confirm = "y" if skip else input("\nIs This correct (Y/n)? ")
+    if any([locales, keymap, timezone, ntp]):
+        confirm = "y" if skip else input("\nIs this correct (Y/n)? ")
         if confirm.lower() in ["y", "yes", "", "s", "sim"]:
             if timezone or ntp:
-                setTimezone(state, timezone, ntp)
+                setTimezoneSecure(state, timezone, ntp)
             if locales:
                 setLocales(state, locales, host)
             if keymap or locales:
-                setDefaults(state, locales, keymap)
+                setDefaultsSecure(state, locales, keymap)
     else:
         print("Nothing to be done.")
