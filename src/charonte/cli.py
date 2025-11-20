@@ -4,6 +4,8 @@ import argparse
 import getpass
 import os
 import sys
+import json
+from importlib import import_module
 
 from omegaconf import OmegaConf
 from pathlib import Path
@@ -17,38 +19,60 @@ from pyinfra.context import ctx_state
 
 from importlib.metadata import entry_points
 
-def discoverAliases():
-    discoveredAliases = {}
-    eps = entry_points()
-    if hasattr(eps, "select"):
-        selected = eps.select(group="charonte.aliases")
-    elif isinstance(eps, dict):
-        selected = eps.get("charonte.aliases", [])
-    else:
-        selected = getattr(eps, "get", lambda *_: [])("charonte.aliases", [])
-    for ep in selected:
-        discoveredAliases[ep.name] = ep.value
+def get_plugins(update_cache=False):
+    CACHE_DIR = Path(os.path.expanduser("~/.cache/charonte"))
+    CACHE_FILE = CACHE_DIR / "plugins.json"
 
-    return discoveredAliases
+    if not update_cache and CACHE_FILE.exists():
+        with open(CACHE_FILE, 'r') as f:
+            try:
+                cache_data = json.load(f)
+                if 'roles' in cache_data and 'aliases' in cache_data:
+                    return cache_data['roles'], cache_data['aliases']
+                else:
+                    print("Warning: Invalid cache file format. Re-discovering plugins.", file=sys.stderr)
+            except json.JSONDecodeError:
+                print("Warning: Could not read cache file. Re-discovering plugins.", file=sys.stderr)
 
-def discoverRoles():
     discovered_roles = {}
+    discovered_aliases = {}
     eps = entry_points()
-    if hasattr(eps, "select"):
-        selected = eps.select(group="charonte.roles")
-    elif isinstance(eps, dict):
-        selected = eps.get("charonte.roles", [])
-    else:
-        selected = getattr(eps, "get", lambda *_: [])("charonte.roles", [])
-    for ep in selected:
-        discovered_roles[ep.name] = ep.load()
 
-    return discovered_roles
+    role_eps = eps.select(group="charonte.roles") if hasattr(eps, "select") else eps.get("charonte.roles", [])
+    for ep in role_eps:
+        discovered_roles[ep.name] = ep.value
+
+    alias_eps = eps.select(group="charonte.aliases") if hasattr(eps, "select") else eps.get("charonte.aliases", [])
+    for ep in alias_eps:
+        discovered_aliases[ep.name] = ep.value
+
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        with open(CACHE_FILE, 'w') as f:
+            json.dump({'roles': discovered_roles, 'aliases': discovered_aliases}, f, indent=4)
+        print(f"Plugin cache saved to {CACHE_FILE}")
+    except OSError as e:
+        print(f"Error: Could not write to cache file {CACHE_FILE}: {e}", file=sys.stderr)
+
+
+    return discovered_roles, discovered_aliases
+
+def load_roles(roles_spec):
+    loaded_roles = {}
+    for name, spec in roles_spec.items():
+        try:
+            module_name, func_name = spec.split(':', 1)
+            module = import_module(module_name)
+            loaded_roles[name] = getattr(module, func_name)
+        except (ImportError, AttributeError, ValueError) as e:
+            print(f"Warning: Could not load role '{name}' from spec '{spec}': {e}", file=sys.stderr)
+    return loaded_roles
 
 
 def argParsing():
     parser = argparse.ArgumentParser(description="Ch-aronte orquestrator.")
     parser.add_argument('tags', nargs='*', help=f"The tag(s) for the role(s) to be executed.")
+    parser.add_argument('-u', '--update-plugins', action='store_true', help="Force update of the plugin cache.")
     parser.add_argument('-e', dest="chobolo", help="Path to Ch-obolo to be used (overrides config file).")
     parser.add_argument('-r', '--roles', action='store_true', help="Check which roles are available.")
     parser.add_argument('-a', '--aliases', action='store_true', help="Check which aliases are available.")
@@ -247,11 +271,16 @@ def handleOrchestration(args, dry, ikwid, ROLES_DISPATCHER, ROLE_ALIASES=None):
     print("Finalized.")
 
 def main():
-    ROLES_DISPATCHER = discoverRoles()
-    ROLE_ALIASES = discoverAliases()
     args = argParsing()
     ikwid = args.i_know_what_im_doing
     dry = args.dry
+
+    if args.update_plugins:
+        get_plugins(update_cache=True)
+        sys.exit(0)
+
+    roles_spec, ROLE_ALIASES = get_plugins()
+    ROLES_DISPATCHER = load_roles(roles_spec)
 
     if args.verbose or args.v>0:
         handleVerbose(args)
