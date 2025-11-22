@@ -145,7 +145,7 @@ def run_aur_logic(state, ChObolo, skip, aur_helper, aur, native, aurDependencies
 
 def main(state, host, chobolo_path, skip, mode):
     ChObolo = OmegaConf.load(chobolo_path)
-    
+
     native = host.get_fact(Command, "pacman -Qqen").strip().splitlines()
     dependencies = host.get_fact(Command, "pacman -Qqdn").strip().splitlines()
     aur = host.get_fact(Command, "pacman -Qqem").strip().splitlines()

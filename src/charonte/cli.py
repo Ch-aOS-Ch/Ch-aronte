@@ -7,6 +7,9 @@ import sys
 import subprocess
 import argcomplete
 import json
+import site
+import glob
+
 from importlib import import_module
 from argcomplete.completers import FilesCompleter
 
@@ -22,7 +25,32 @@ from pyinfra.context import ctx_state
 
 from importlib.metadata import entry_points
 
+pluginDevPath = os.getenv('CHARONTE_DEV_PATH', None)
+if pluginDevPath:
+    absPath = os.path.abspath(pluginDevPath)
+    if os.path.exists(absPath):
+        sys.path.insert(0, pluginDevPath)
+    else:
+        print(f"Warning: Ch-aronte plugin path '{absPath}' does not exist.", file=sys.stderr)
+
 def get_plugins(update_cache=False):
+    USER_PLUGIN_DIR = Path(os.path.expanduser("~/.local/share/charonte/plugins"))
+
+    USER_PLUGIN_DIR.mkdir(parents=True, exist_ok=True)
+
+    plugin_path_str = str(USER_PLUGIN_DIR)
+    if plugin_path_str not in sys.path:
+        site.addsitedir(plugin_path_str)
+
+    wheel_files = list(USER_PLUGIN_DIR.glob("*.whl"))
+    for whl in wheel_files:
+        try:
+            whl_path = str(whl.resolve())
+            if whl_path not in sys.path:
+                sys.path.insert(0, whl_path)
+        except Exception as e:
+            print(f"Warning: Could not load plugin wheel '{whl}': {e}", file=sys.stderr)
+
     CACHE_DIR = Path(os.path.expanduser("~/.cache/charonte"))
     CACHE_FILE = CACHE_DIR / "plugins.json"
     cache_exists = CACHE_FILE.exists()
@@ -429,52 +457,56 @@ def handleGenerateTab():
 
 
 def main():
-    parser = argParsing()
+    try:
+        parser = argParsing()
 
-    argcomplete.autocomplete(parser)
+        argcomplete.autocomplete(parser)
 
-    args = parser.parse_args()
+        args = parser.parse_args()
 
-    role_specs, ROLE_ALIASES = get_plugins(args.update_plugins)
+        role_specs, ROLE_ALIASES = get_plugins(args.update_plugins)
 
-    if args.verbose or args.v > 0:
-        handleVerbose(args)
+        if args.verbose or args.v > 0:
+            handleVerbose(args)
 
-    if args.generate_tab:
-        handleGenerateTab()
-        sys.exit(0)
+        if args.generate_tab:
+            handleGenerateTab()
+            sys.exit(0)
 
-    if args.check_sec:
-        runSopsCheck(args.sops_file_override, args.secrets_file_override)
-        sys.exit(0)
+        if args.check_sec:
+            runSopsCheck(args.sops_file_override, args.secrets_file_override)
+            sys.exit(0)
 
-    if args.edit_sec:
-        runSopsEdit(args.sops_file_override, args.secrets_file_override)
-        sys.exit(0)
+        if args.edit_sec:
+            runSopsEdit(args.sops_file_override, args.secrets_file_override)
+            sys.exit(0)
 
-    if args.edit_chobolo:
-        runChoboloEdit(args.chobolo)
-        sys.exit(0)
+        if args.edit_chobolo:
+            runChoboloEdit(args.chobolo)
+            sys.exit(0)
 
-    if args.aliases:
-        checkAliases(ROLE_ALIASES)
+        if args.aliases:
+            checkAliases(ROLE_ALIASES)
 
-    if args.roles:
-        checkRoles(role_specs)
+        if args.roles:
+            checkRoles(role_specs)
 
-    is_setter_mode = any([args.set_chobolo_file, args.set_secrets_file, args.set_sops_file])
-    if is_setter_mode:
-        setMode(args)
-        sys.exit(0)
+        is_setter_mode = any([args.set_chobolo_file, args.set_secrets_file, args.set_sops_file])
+        if is_setter_mode:
+            setMode(args)
+            sys.exit(0)
 
-    if not args.tags:
-        print('No tags passed.')
-        sys.exit(0)
+        if not args.tags:
+            print('No tags passed.')
+            sys.exit(0)
 
-    ROLES_DISPATCHER = load_roles(role_specs)
-    ikwid = args.i_know_what_im_doing
-    dry = args.dry
-    handleOrchestration(args, dry, ikwid, ROLES_DISPATCHER, ROLE_ALIASES)
+        ROLES_DISPATCHER = load_roles(role_specs)
+        ikwid = args.i_know_what_im_doing
+        dry = args.dry
+        handleOrchestration(args, dry, ikwid, ROLES_DISPATCHER, ROLE_ALIASES)
+    except KeyboardInterrupt:
+        print("\nOperation cancelled by user.", file=sys.stderr)
+        sys.exit(1)
 
 if __name__ == "__main__":
   main()
