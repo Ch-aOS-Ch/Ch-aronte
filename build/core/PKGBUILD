@@ -1,0 +1,27 @@
+# Maintainer: Dexmachi caiorocoli@gmail.com
+pkgname=ch-aronte
+pkgver=0.0.7.3b
+pkgrel=1
+pkgdesc="Ch-aOS B-coin core for Ch-aronte"
+arch=('any')
+_gitname="Ch-aronte"
+_gituser="Ch-aOS-Ch"
+_source_url="https://github.com/${_gituser}/${_gitname}"
+url="git+${_source_url}.git#branch=pyinfra"
+
+license=('MIT')
+depends=('b-coin')
+makedepends=('python' 'python-pip' 'python-setuptools' 'python-wheel' 'python-pytest')
+
+source=("${_gitname}-${pkgver}.tar.gz::${_source_url}/archive/refs/tags/v${pkgver}.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  cd "$srcdir/${_gitname}-$pkgver/ch-aronte-core"
+
+  uv build 2>/dev/null
+
+  install -d "$pkgdir/usr/share/charonte/plugins/"
+
+  install -m644 dist/*.whl "$pkgdir/usr/share/charonte/plugins/"
+}
