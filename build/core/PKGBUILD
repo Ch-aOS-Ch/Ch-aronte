@@ -10,7 +10,7 @@ _source_url="https://github.com/${_gituser}/${_gitname}"
 url="git+${_source_url}.git#branch=pyinfra"
 
 license=('MIT')
-depends=('b-coin')
+depends=('ch-aos')
 makedepends=('python' 'python-pip' 'python-setuptools' 'python-wheel' 'python-pytest')
 
 source=("${_gitname}-${pkgver}.tar.gz::${_source_url}/archive/refs/tags/v${pkgver}.tar.gz")
