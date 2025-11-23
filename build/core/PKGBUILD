@@ -1,6 +1,6 @@
 # Maintainer: Dexmachi caiorocoli@gmail.com
 pkgname=ch-aronte
-pkgver=0.0.7.3b
+pkgver=0.0.7.4b
 pkgrel=1
 pkgdesc="Ch-aOS core for Ch-aronte"
 arch=('any')
