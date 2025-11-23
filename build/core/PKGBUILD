@@ -1,10 +1,10 @@
 # Maintainer: Dexmachi caiorocoli@gmail.com
 pkgname=ch-aronte
-pkgver=0.0.7.4b
+pkgver=0.1.0
 pkgrel=1
 pkgdesc="Ch-aOS core for Ch-aronte"
 arch=('any')
-_gitname="Ch-aOS"
+_gitname="Ch-aronte"
 _gituser="Ch-aOS-Ch"
 _source_url="https://github.com/${_gituser}/${_gitname}"
 url="git+${_source_url}.git#branch=pyinfra"
@@ -17,7 +17,7 @@ source=("${_gitname}-${pkgver}.tar.gz::${_source_url}/archive/refs/tags/v${pkgve
 sha256sums=('SKIP')
 
 package() {
-  cd "$srcdir/${_gitname}-$pkgver/ch-aronte-core"
+  cd "$srcdir/${_gitname}-$pkgver"
 
   uv build 2>/dev/null
 
