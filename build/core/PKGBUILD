@@ -2,7 +2,7 @@
 pkgname=ch-aronte
 pkgver=0.0.7.3b
 pkgrel=1
-pkgdesc="Ch-aOS B-coin core for Ch-aronte"
+pkgdesc="Ch-aOS core for Ch-aronte"
 arch=('any')
 _gitname="Ch-aOS"
 _gituser="Ch-aOS-Ch"
@@ -21,7 +21,7 @@ package() {
 
   uv build 2>/dev/null
 
-  install -d "$pkgdir/usr/share/charonte/plugins/"
+  install -d "$pkgdir/usr/share/chaos/plugins/"
 
-  install -m644 dist/*.whl "$pkgdir/usr/share/charonte/plugins/"
+  install -m644 dist/*.whl "$pkgdir/usr/share/chaos/plugins/"
 }

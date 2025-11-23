@@ -1,4 +1,3 @@
-# translating this code to python with pyinfra for charonte
 from omegaconf import OmegaConf
 
 from pyinfra.api.operation import add_op

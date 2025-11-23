@@ -19,7 +19,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 
-[project.entry-points."charonte.roles"]
+[project.entry-points."chaos.roles"]
 packages     = "charonte.roles.pkgs.tasks.pkgs:main"
 users        = "charonte.roles.users.tasks.users:run_user_logic"
 repositories = "charonte.roles.repos.tasks.repos:run_repo_logic"
@@ -29,7 +29,7 @@ services     = "charonte.roles.services.tasks.services:run_service_logic"
 region       = "charonte.roles.region.tasks.region:run_region_logic"
 reflector    = "charonte.roles.reflector.tasks.reflector:reflectorLogic"
 
-[project.entry-points."charonte.aliases"]
+[project.entry-points."chaos.aliases"]
 allPkgs = "packages"
 all-packages = "packages"
 natPkgs = "packages"
