@@ -40,3 +40,7 @@ pkgs = "packages"
 usr = "users"
 repos = "repositories"
 boot = "bootloader"
+
+[project.entry-points."chaos.explain"]
+users = "charonte.explainations.users.users:UsersExplain"
+
