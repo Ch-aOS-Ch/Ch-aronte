@@ -43,3 +43,7 @@ boot = "bootloader"
 
 [project.entry-points."chaos.explain"]
 users = "charonte.explainations.users.users:UsersExplain"
+repos = "charonte.explainations.repos.repos:ReposExplain"
+pkgs = "charonte.explainations.pkgs.pkgs:PkgsExplain"
+region = "charonte.explainations.region.region:RegionExplain"
+services = "charonte.explainations.services.services:ServicesExplain"
