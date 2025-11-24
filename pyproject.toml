@@ -43,4 +43,3 @@ boot = "bootloader"
 
 [project.entry-points."chaos.explain"]
 users = "charonte.explainations.users.users:UsersExplain"
-

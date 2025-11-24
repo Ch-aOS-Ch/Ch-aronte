@@ -13,9 +13,9 @@ class UsersExplain():
   - name: "dex"
     shell: "zsh"
     sudo: True""",
-                    'equivalent': "useradd -m -s /bin/zsh dex && usermod -aG wheel dex"
                 }
             ],
+            'equivalent': [ "useradd -m -s /bin/zsh dex && usermod -aG wheel dex", ],
             'learn_more': ['man useradd', 'man passwd', 'man sudoers']
         }
 
