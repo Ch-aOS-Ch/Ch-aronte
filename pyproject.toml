@@ -21,8 +21,6 @@ pythonpath = ["src"]
 
 [project.entry-points."chaos.roles"]
 packages     = "charonte.roles.pkgs.tasks.pkgs:main"
-native-packages = "charonte.roles.pkgs.tasks.pkgs:main"
-aur-packages = "charonte.roles.pkgs.tasks.pkgs:main"
 users        = "charonte.roles.users.tasks.users:run_user_logic"
 repositories = "charonte.roles.repos.tasks.repos:run_repo_logic"
 bootloader   = "charonte.roles.bootloader.tasks.bootloader:runBootloader"
@@ -33,8 +31,11 @@ reflector    = "charonte.roles.reflector.tasks.reflector:reflectorLogic"
 
 [project.entry-points."chaos.aliases"]
 allPkgs = "packages"
-natPkgs = "native_packages"
-aurPkgs = "aur_packages"
+all-packages = "packages"
+natPkgs = "packages"
+native-packages = "packages"
+aurPkgs = "packages"
+aur-packages = "packages"
 pkgs = "packages"
 usr = "users"
 repos = "repositories"
