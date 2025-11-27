@@ -1,4 +1,5 @@
 class ReposExplain():
+    _order=['managed', 'TPRepos', 'override']
     def explain_repos(self, detail_level='basic'):
         return {
             'concept': 'Pacman Repositories Management',

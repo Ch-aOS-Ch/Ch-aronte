@@ -1,4 +1,5 @@
 class RegionExplain():
+    _order=['locale', 'timezone', 'keymap', 'ntp']
     def explain_region(self, detail_level='basic'):
         return {
             'concept': 'System Region and Localization',

@@ -1,4 +1,5 @@
 class ServicesExplain():
+    _order=['dense', 'blacklist']
     def explain_services(self, detail_level='basic'):
         return {
             'concept': 'Systemd Services',

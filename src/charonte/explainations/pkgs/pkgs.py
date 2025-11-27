@@ -1,4 +1,5 @@
 class PkgsExplain():
+    _order = ['aur', 'helper']
     def explain_pkgs(self, detail_level='basic'):
         return {
             'concept': 'System Package Management',

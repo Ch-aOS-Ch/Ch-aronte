@@ -1,4 +1,5 @@
 class UsersExplain():
+    _order=['shell', 'group', 'sudo', 'root']
     def explain_users(self, detail_level='basic'):
         return {
             'concept': 'User Management',
