@@ -53,7 +53,6 @@ EOF
         }
 
     def explain_TPRepos(self, detail_level='basic'):
-        """Explains the third_party field"""
         return {
             'concept': 'Third-Party Repositories',
             'what': 'The `third_party` key is a list that allows you to add custom, non-official pacman repositories to your system.',
@@ -65,7 +64,6 @@ EOF
         }
 
     def explain_managed(self, detail_level='basic'):
-        """Explains the managed field"""
         return {
             'concept': 'Managed Official Repositories',
             'what': 'The `managed` key is a block of booleans that controls which official Arch Linux repositories (`core`, `extra`, `multilib`, and their `testing` counterparts) are enabled.',
@@ -85,7 +83,6 @@ managed:
         }
 
     def explain_override(self, detail_level='basic'):
-        """Explains the i_know_exactly_what_im_doing field"""
         return {
             'concept': 'Options Block Override',
             'what': 'The `i_know_exactly_what_im_doing` key, when set to a string, replaces the default, safe `[options]` block in `pacman.conf` with the provided custom string.',
