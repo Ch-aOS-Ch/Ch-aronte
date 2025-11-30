@@ -9,7 +9,6 @@ from io import StringIO
 from pyinfra.api.operation import add_op
 from pyinfra.operations import server, files
 from pyinfra.facts.server import Command
-from pyinfra.facts.files import File, FindFiles
 
 def userDelta(host, ChObolo):
     """Get the users to remove"""
@@ -41,7 +40,7 @@ def getUserPass(ChObolo, secFileO, secSopsO):
     if secMode=='sops':
         try:
             result=subprocess.run(
-                ['sops', '-d', secFile],
+                ['sops', '--config', secSopsO, '-d', secFile],
                 capture_output=True,
                 text=True,
                 check=True
