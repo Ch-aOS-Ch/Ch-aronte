@@ -106,21 +106,32 @@ def aurLogic(state, toAddAur, toRemoveAur, aur_helper, skip):
         if confirmAur.lower() in ["y", "yes", "", "s", "sim"]:
             print("\nInitiating AUR package management...")
             if toAddAur:
-                packagesStr = " ".join(toAddAur)
-                fullCommand = f"{aur_helper} -S --noconfirm --answerdiff None --answerclean All --removemake {packagesStr}"
+                add_command = [
+                    aur_helper,
+                    '-S',
+                    '--noconfirm',
+                    '--answerdiff', 'None',
+                    '--answerclean', 'All',
+                    '--removemake'
+                ]
+                add_command.extend(toAddAur)
                 add_op(
                     state,
                     server.shell,
-                    commands=[fullCommand],
+                    commands=[add_command],
                     name="Instaling AUR packages.",
                 )
             if toRemoveAur:
-                packagesRmvStr = " ".join(toRemoveAur)
-                fullRemoveCommand = f"{aur_helper} -Rns --noconfirm {packagesRmvStr}"
+                remove_command = [
+                    aur_helper,
+                    '-Rns',
+                    '--noconfirm'
+                ]
+                remove_command.extend(toRemoveAur)
                 add_op(
                     state,
                     server.shell,
-                    commands=[fullRemoveCommand],
+                    commands=[remove_command],
                     name="Uninstalling AUR packages.",
                 )
     elif aur_work_to_do and not aur_helper:
