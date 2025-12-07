@@ -1,0 +1,17 @@
+src/ch_aronte_core.egg-info
+src/charonte/__pycache__
+src/charonte/roles/__pycache__
+src/charonte/roles/aurHelper/__pycache__
+src/charonte/roles/aurHelper/tasks/__pycache__/__init__.cpython-313.pyc
+src/charonte/roles/aurHelper/tasks/__pycache__
+src/charonte/roles/pkgs/__pycache__
+src/charonte/roles/pkgs/tasks/__pycache__
+src/charonte/roles/region/__pycache__
+src/charonte/roles/region/tasks/__pycache__
+src/charonte/roles/repos/__pycache__
+src/charonte/roles/repos/tasks/__pycache__
+src/charonte/roles/services/__pycache__
+src/charonte/roles/services/tasks/__pycache__
+src/charonte/roles/users/__pycache__
+src/charonte/roles/users/tasks/__pycache__
+tests/__pycache__

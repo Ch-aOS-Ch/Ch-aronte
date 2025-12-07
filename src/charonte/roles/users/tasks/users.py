@@ -13,7 +13,7 @@ from pyinfra.facts.server import Command
 def userDelta(host, ChObolo):
     """Get the users to remove"""
     # This gets all non system users
-    if not ChObolo.get('users'):
+    if ChObolo.get('users') is None:
         return [], []
     users_raw_str = host.get_fact(Command, "awk -F: '($3>=1000 && $7 ~ /(bash|zsh|fish|sh)$/){print $1}' /etc/passwd")
     users_raw = users_raw_str.strip().splitlines() if users_raw_str else []

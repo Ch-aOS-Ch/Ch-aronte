@@ -7,7 +7,7 @@ from omegaconf import OmegaConf
 from pyinfra.api.operation import add_op
 
 def isValidTimezone(tz):
-    return re.match(r'^[A-Za-z_]+/[A-Za-z_]+$', tz)
+    return bool(re.match(r'^[A-Za-z_-]+/[A-Za-z_-]+$', tz))
 
 def isValidForConf(value):
     return '\n' not in value and '\r' not in value
