@@ -186,7 +186,7 @@ def manageSudoAccess(state, host, ChObolo):
             _sudo=True
         )
 
-def run_user_logic(state, host, chobolo_path, skip, secrets_file_override, sops_file_override):
+def run_user_logic(state, host, chobolo_path, skip, secrets_file_override, sops_file_override, args):
     ChObolo = OmegaConf.load(chobolo_path)
 
     toRemove, sysUsers = userDelta(host, ChObolo)
