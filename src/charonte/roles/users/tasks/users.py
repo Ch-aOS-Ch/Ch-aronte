@@ -27,39 +27,18 @@ def userDelta(host, ChObolo):
     toRemove = sorted(users - userList)
     return toRemove, sysUsers
 
-def getUserPass(ChObolo, secFileO, secSopsO):
-    secCfg=ChObolo.get('secrets')
-    userPass={}
-    if not secCfg:
-        return userPass
-
-    secMode=secCfg.get('sec_mode')
-    secFile=secFileO if secFileO else secCfg.get('sec_file')
-    if not secFile or not secMode:
-        return userPass
-    if secMode=='sops':
-        try:
-            result=subprocess.run(
-                ['sops', '--config', secSopsO, '-d', secFile],
-                capture_output=True,
-                text=True,
-                check=True
-            )
-            decryptedContent=result.stdout
-            userPass=yaml.safe_load(decryptedContent).get('user_secrets',{})
-        except FileNotFoundError:
-            print(f"WARNING!!!! 'sops' command not found. Is it installed?")
-        except subprocess.CalledProcessError as e:
-            print(f"warning!!!! Could not decrypt sops file {secFile}: {e.stderr}")
-        except Exception as e:
-            print(f"WARNING!!!! An unexpected error occured with sops file {secFile}: {e}")
-    elif secMode == 'charonte':
-        try:
-            with open(secFile, 'r') as f:
-                userPass=yaml.safe_load(f).get('user_secrets', {})
-        except Exception as e:
-            print(f"WARNING!!!! Could not read file {secFile}: {e}")
-    return userPass
+def getUserPass(decrypted_content: str):
+    if not decrypted_content:
+        return {}
+    try:
+        data = yaml.safe_load(decrypted_content)
+        if data and 'user_secrets' in data:
+            return data.get('user_secrets', {})
+    except yaml.YAMLError as e:
+        print(f"WARNING!!!! Could not parse secrets: {e}")
+    except Exception as e:
+        print(f"WARNING!!!! An unexpected error occurred while parsing secrets: {e}")
+    return {}
 
 def userLogic(state, toRemove, toAdd, skip, ChObolo, userPass):
     if toRemove or toAdd:
@@ -186,7 +165,8 @@ def manageSudoAccess(state, host, ChObolo):
             _sudo=True
         )
 
-def run_user_logic(state, host, chobolo_path, skip, secrets_file_override, sops_file_override, args):
+def run_user_logic(state, host, chobolo_path, skip, *decrypted_secrets_tuple):
+    decrypted_secrets = decrypted_secrets_tuple[0] if decrypted_secrets_tuple else ""
     ChObolo = OmegaConf.load(chobolo_path)
 
     toRemove, sysUsers = userDelta(host, ChObolo)
@@ -198,7 +178,7 @@ def run_user_logic(state, host, chobolo_path, skip, secrets_file_override, sops_
                 toAdd.append(user.name)
             else:
                 print(f"cannot manage {user.name}, it is a system user.")
-    userPass = getUserPass(ChObolo, secrets_file_override, sops_file_override)
+    userPass = getUserPass(decrypted_secrets)
 
     manageHostname(state, ChObolo)
     manageSudoAccess(state, host, ChObolo)
