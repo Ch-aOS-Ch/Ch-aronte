@@ -105,7 +105,6 @@ def nativeLogic(state, toAddNative, toRemoveNative, skip):
                     '--noconfirm',
                     '--needed',
                     '--noprogressbar',
-                    '--quiet',
                     '--asexplicit'
                 ]
                 add_cmd.extend(toAddNative)
@@ -124,7 +123,6 @@ def nativeLogic(state, toAddNative, toRemoveNative, skip):
                     '-Rcns',
                     '--noconfirm',
                     '--noprogressbar',
-                    '--quiet',
                 ]
                 remove_cmd.extend(toRemoveNative)
                 add_op(
