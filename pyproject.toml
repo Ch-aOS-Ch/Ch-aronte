@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ch-aronte-core"
-version = "0.1.0"
+version = "0.1.2"
 description = "Core arch roles for the Ch-aOS project suite"
 readme = "README.md"
 requires-python = ">=3.8"
