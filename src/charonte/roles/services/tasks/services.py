@@ -1,10 +1,7 @@
 from omegaconf import OmegaConf
-import subprocess
-from io import StringIO
 from pyinfra.api.operation import add_op
-from pyinfra.operations import server, files, systemd
 from pyinfra.facts.server import Command
-from pyinfra.facts.files import File, FindFiles
+from pyinfra.operations import systemd
 
 SERVICES_BLACKLIST = {
     "dbus-broker.service",
@@ -51,23 +48,36 @@ SERVICES_BLACKLIST = {
     "user@.service",
 }
 
+
 def servicesDelta(host, ChObolo):
-    servicesRawStr = host.get_fact(Command, "systemctl list-unit-files --type=service --no-pager --no-legend | awk '{print $1}'")
+    servicesRawStr = host.get_fact(
+        Command,
+        "systemctl list-unit-files --type=service --no-pager --no-legend | awk '{print $1}'",
+    )
     all_services = set(servicesRawStr.strip().splitlines()) if servicesRawStr else set()
 
-    enabledServicesRawStr = host.get_fact(Command, "systemctl list-unit-files --type=service --state=enabled | grep -Ev 'getty|timesyncd|UNIT|unit' | awk '{print $1}'")
-    enabledServicesFull = set(enabledServicesRawStr.strip().splitlines()) if enabledServicesRawStr else set()
-    enabledServices = {s for s in enabledServicesFull if "@." not in s and "initrd" not in s}
+    enabledServicesRawStr = host.get_fact(
+        Command,
+        "systemctl list-unit-files --type=service --state=enabled | grep -Ev 'getty|timesyncd|UNIT|unit' | awk '{print $1}'",
+    )
+    enabledServicesFull = (
+        set(enabledServicesRawStr.strip().splitlines())
+        if enabledServicesRawStr
+        else set()
+    )
+    enabledServices = {
+        s for s in enabledServicesFull if "@." not in s and "initrd" not in s
+    }
 
-    declaredServices = ChObolo.get('services', [])
+    declaredServices = ChObolo.get("services", [])
 
     expanded_desired_services = set()
     service_name_to_config = {}
 
     for serviceConfig in declaredServices:
-        serviceName = serviceConfig.get('name')
+        serviceName = serviceConfig.get("name")
 
-        if serviceConfig.get('dense_service', False):
+        if serviceConfig.get("dense_service", False):
             for s in all_services:
                 # Filter out template units and initrd services
                 if "@." in s or "initrd" in s:
@@ -77,7 +87,7 @@ def servicesDelta(host, ChObolo):
                     service_name_to_config[s] = serviceConfig
 
         else:
-            if not serviceName.endswith('.service'):
+            if not serviceName.endswith(".service"):
                 serviceName = f"{serviceName}.service"
             expanded_desired_services.add(serviceName)
             service_name_to_config[serviceName] = serviceConfig
@@ -85,13 +95,18 @@ def servicesDelta(host, ChObolo):
     toAdd_names = expanded_desired_services - enabledServices
     toRemove_names = (enabledServices - expanded_desired_services) - SERVICES_BLACKLIST
 
-    return sorted(list(toAdd_names)), sorted(list(toRemove_names)), service_name_to_config
+    return (
+        sorted(list(toAdd_names)),
+        sorted(list(toRemove_names)),
+        service_name_to_config,
+    )
+
 
 def servicesLogic(state, toAdd, toRemove, config_map):
     for service_name in toAdd:
         config = config_map[service_name]
-        sState = config.get('running', True)
-        enabled = config.get('on_boot', True)
+        sState = config.get("running", True)
+        enabled = config.get("on_boot", True)
         add_op(
             state,
             systemd.service,
@@ -99,7 +114,7 @@ def servicesLogic(state, toAdd, toRemove, config_map):
             service=service_name,
             running=sState,
             enabled=enabled,
-            _sudo=True
+            _sudo=True,
         )
 
     for service_name in toRemove:
@@ -110,8 +125,9 @@ def servicesLogic(state, toAdd, toRemove, config_map):
             service=service_name,
             running=False,
             enabled=False,
-            _sudo=True
+            _sudo=True,
         )
+
 
 def run_service_logic(state, host, chobolo_path, skip):
     ChObolo = OmegaConf.load(chobolo_path)
@@ -120,11 +136,11 @@ def run_service_logic(state, host, chobolo_path, skip):
 
     if work_to_do:
         if toAdd:
-            print(f"\n--- Services to converge (add/enable) ---")
+            print("\n--- Services to converge (add/enable) ---")
             for s in toAdd:
                 print(s)
         if toRemove:
-            print(f"\n--- Services to stop/disable ---")
+            print("\n--- Services to stop/disable ---")
             for s in toRemove:
                 print(s)
 

@@ -1,6 +1,9 @@
 from unittest.mock import Mock
+
 from omegaconf import OmegaConf
+
 from charonte.roles.aurHelper.tasks.helper import helperDelta
+
 
 def test_add_helper():
     """Test adding a new AUR helper when none are installed."""
@@ -19,6 +22,7 @@ aurHelpers:
     assert "yay" in to_add
     assert not to_remove
 
+
 def test_remove_helper():
     """Test removing an obsolete AUR helper."""
     chobolo_str = """
@@ -29,9 +33,10 @@ aurHelpers: []
 
     # Simulate that 'paru' is installed, but 'yay' is not.
     def side_effect(fact, path):
-        if 'paru' in path:
-            return {'path': '/usr/bin/paru'}
+        if "paru" in path:
+            return {"path": "/usr/bin/paru"}
         return None
+
     mock_host.get_fact.side_effect = side_effect
 
     to_add, to_remove = helperDelta(mock_host, chobolo)
@@ -39,6 +44,7 @@ aurHelpers: []
     assert not to_add
     assert "paru" in to_remove
     assert "yay" not in to_remove
+
 
 def test_switch_helpers():
     """Test switching from one helper to another."""
@@ -51,16 +57,18 @@ aurHelpers:
 
     # Simulate 'yay' is installed, but 'paru' is not.
     def side_effect(fact, path):
-        if 'yay' in path:
-            return {'path': '/usr/bin/yay'}
-        if 'paru' in path:
+        if "yay" in path:
+            return {"path": "/usr/bin/yay"}
+        if "paru" in path:
             return None
+
     mock_host.get_fact.side_effect = side_effect
 
     to_add, to_remove = helperDelta(mock_host, chobolo)
 
     assert "paru" in to_add
     assert "yay" in to_remove
+
 
 def test_no_changes_needed():
     """Test scenario where the state is already as desired."""
@@ -73,10 +81,11 @@ aurHelpers:
 
     # Simulate that 'yay' is installed, but 'paru' is not.
     def side_effect(fact, path):
-        if 'yay' in path:
-            return {'path': '/usr/bin/yay'}
-        if 'paru' in path:
+        if "yay" in path:
+            return {"path": "/usr/bin/yay"}
+        if "paru" in path:
             return None
+
     mock_host.get_fact.side_effect = side_effect
 
     to_add, to_remove = helperDelta(mock_host, chobolo)

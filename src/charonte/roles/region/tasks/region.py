@@ -1,16 +1,20 @@
-from io import StringIO
-from pyinfra.operations import server, files
-import sys
 import re
-from pyinfra.facts.server import Command
+import sys
+from io import StringIO
+
 from omegaconf import OmegaConf
 from pyinfra.api.operation import add_op
+from pyinfra.facts.server import Command
+from pyinfra.operations import files, server
+
 
 def isValidTimezone(tz):
-    return bool(re.match(r'^[A-Za-z_-]+/[A-Za-z_-]+$', tz))
+    return bool(re.match(r"^[A-Za-z_-]+/[A-Za-z_-]+$", tz))
+
 
 def isValidForConf(value):
-    return '\n' not in value and '\r' not in value
+    return "\n" not in value and "\r" not in value
+
 
 def setTimezoneSecure(state, timezone, ntp):
     if timezone:
@@ -21,8 +25,8 @@ def setTimezoneSecure(state, timezone, ntp):
             state,
             server.shell,
             name=f"Set timezone to {timezone}",
-            commands=[['timedatectl', 'set-timezone', timezone]],
-            _sudo=True
+            commands=[["timedatectl", "set-timezone", timezone]],
+            _sudo=True,
         )
     if ntp:
         add_op(
@@ -30,8 +34,9 @@ def setTimezoneSecure(state, timezone, ntp):
             server.shell,
             name="Enable NTP",
             commands=[["timedatectl", "set-ntp", "true"]],
-            _sudo=True
+            _sudo=True,
         )
+
 
 def setLocales(state, locales, host):
     if not locales:
@@ -45,11 +50,15 @@ def setLocales(state, locales, host):
     modifiedContent = originalContent
     for locale in locales:
         if not isValidForConf(locale):
-            print(f"WARNING: Locale '{locale}' contains invalid characters and will be skipped.")
+            print(
+                f"WARNING: Locale '{locale}' contains invalid characters and will be skipped."
+            )
             continue
         desiredLine = f"{locale} UTF-8"
         regex = re.compile(rf"^\s*#?\s*{re.escape(locale)}\s+UTF-8.*$", re.MULTILINE)
-        if re.search(rf"^\s*{re.escape(desiredLine)}.*$", modifiedContent, re.MULTILINE):
+        if re.search(
+            rf"^\s*{re.escape(desiredLine)}.*$", modifiedContent, re.MULTILINE
+        ):
             continue
         newContent, num_subs = regex.subn(desiredLine, modifiedContent)
         if num_subs > 0:
@@ -71,14 +80,17 @@ def setLocales(state, locales, host):
             server.shell,
             name="Regenerate locales",
             commands="locale-gen",
-            _sudo=True
+            _sudo=True,
         )
+
 
 def setDefaultsSecure(state, locales, keymap):
     if locales:
         defaultLocale = locales[0]
         if not isValidForConf(defaultLocale):
-            print(f"ERROR: Default locale '{defaultLocale}' contains invalid characters. Aborting.")
+            print(
+                f"ERROR: Default locale '{defaultLocale}' contains invalid characters. Aborting."
+            )
             return
         add_op(
             state,
@@ -87,7 +99,7 @@ def setDefaultsSecure(state, locales, keymap):
             src=StringIO(f"LANG={defaultLocale}\n"),
             dest="/etc/locale.conf",
             _sudo=True,
-            mode="0644"
+            mode="0644",
         )
     if keymap:
         if not isValidForConf(keymap):
@@ -100,17 +112,18 @@ def setDefaultsSecure(state, locales, keymap):
             src=StringIO(f"KEYMAP={keymap}\n"),
             dest="/etc/vconsole.conf",
             _sudo=True,
-            mode="0644"
+            mode="0644",
         )
+
 
 def run_region_logic(state, host, choboloPath, skip):
     try:
         chObolo = OmegaConf.load(choboloPath)
-        region = chObolo.get('region')
-        locales = region.get('locale')
-        keymap = region.get('keymap')
-        timezone = region.get('timezone')
-        ntp = region.get('ntp')
+        region = chObolo.get("region")
+        locales = region.get("locale")
+        keymap = region.get("keymap")
+        timezone = region.get("timezone")
+        ntp = region.get("ntp")
     except AttributeError as e:
         print(f"{e} You've probably not set a region block in your chobolo")
         sys.exit(0)

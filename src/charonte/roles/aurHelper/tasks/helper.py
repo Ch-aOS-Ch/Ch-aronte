@@ -1,29 +1,30 @@
-import os
 
 from omegaconf import OmegaConf
 from pyinfra.api.operation import add_op
 from pyinfra.facts.files import File
-from pyinfra.operations import pacman, git, server
+from pyinfra.operations import git, pacman, server
+
 
 def helperDelta(host, ChObolo):
-    declaredHelpers = ChObolo.get('aurHelpers', [])
+    declaredHelpers = ChObolo.get("aurHelpers", [])
     knownHelpers = [
-        {"name": 'yay', 'checkFile': '/usr/bin/yay'},
+        {"name": "yay", "checkFile": "/usr/bin/yay"},
         {"name": "paru", "checkFile": "/usr/bin/paru"},
     ]
-    helpersToAdd=[]
-    helpersToRemove=[]
+    helpersToAdd = []
+    helpersToRemove = []
     for helper in knownHelpers:
-        isInstalled = host.get_fact(File, path=helper['checkFile'])
-        isDeclared = helper['name'] in declaredHelpers
+        isInstalled = host.get_fact(File, path=helper["checkFile"])
+        isDeclared = helper["name"] in declaredHelpers
         if isInstalled and not isDeclared:
-            helpersToRemove.append(helper['name'])
+            helpersToRemove.append(helper["name"])
         elif isDeclared and not isInstalled:
-            helpersToAdd.append(helper['name'])
+            helpersToAdd.append(helper["name"])
     return helpersToAdd, helpersToRemove
 
+
 def helperLogic(state, host, helpersToAdd, helpersToRemove):
-    command="makepkg -sirc --noconfirm --needed"
+    command = "makepkg -sirc --noconfirm --needed"
     if helpersToAdd:
         for helper in helpersToAdd:
             repo = f"https://aur.archlinux.org/{helper}.git"
@@ -44,12 +45,9 @@ def helperLogic(state, host, helpersToAdd, helpersToRemove):
             )
     if helpersToRemove:
         add_op(
-            state,
-            pacman.packages,
-            packages=helpersToRemove,
-            present=False,
-            _sudo=True
+            state, pacman.packages, packages=helpersToRemove, present=False, _sudo=True
         )
+
 
 def run_aur(state, host, chobolo_path, skip):
     ChObolo = OmegaConf.load(chobolo_path)

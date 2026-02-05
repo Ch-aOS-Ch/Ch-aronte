@@ -1,15 +1,18 @@
-from io import StringIO
-from omegaconf import OmegaConf
-from pyinfra.api.operation import add_op
-from pyinfra.operations import server, files
-from pyinfra.facts.files import Directory
 import re
 
+from omegaconf import OmegaConf
+from pyinfra.api.operation import add_op
+from pyinfra.facts.files import Directory
+from pyinfra.operations import files, server
+
+
 def isValidDiskPath(path):
-    return re.match(r'^/dev/[a-zA-Z0-9/]+$', path)
+    return re.match(r"^/dev/[a-zA-Z0-9/]+$", path)
+
 
 def isValidLabel(label):
-    return re.match(r'^[a-zA-Z0-9_-]+$', label)
+    return re.match(r"^[a-zA-Z0-9_-]+$", label)
+
 
 def checkBootMode(host):
     path = "/sys/firmware/efi/"
@@ -20,14 +23,19 @@ def checkBootMode(host):
         print("System is booted in BIOS mode.")
         return "BIOS"
 
+
 def installBootloaderSecure(state, chObolo, firmware):
-    bootloader = chObolo.get('bootloader')
-    partitioningTab = chObolo.get('partitioning')
-    disk = partitioningTab.get('disk')
-    bootPart = next((p for p in partitioningTab.partitions if p.get('important') == 'boot'), None)
-    bootMount = bootPart.get('mountpoint') if bootPart else None
-    rootPart = next((p for p in partitioningTab.partitions if p.get('important') == 'root'), None)
-    rootName = rootPart.get('name') if rootPart else None
+    bootloader = chObolo.get("bootloader")
+    partitioningTab = chObolo.get("partitioning")
+    disk = partitioningTab.get("disk")
+    bootPart = next(
+        (p for p in partitioningTab.partitions if p.get("important") == "boot"), None
+    )
+    bootMount = bootPart.get("mountpoint") if bootPart else None
+    rootPart = next(
+        (p for p in partitioningTab.partitions if p.get("important") == "root"), None
+    )
+    rootName = rootPart.get("name") if rootPart else None
 
     if not bootMount:
         print("ERROR: Boot partition must have a mountpoint.")
@@ -46,13 +54,19 @@ def installBootloaderSecure(state, chObolo, firmware):
     match bootloader:
         case "grub":
             if firmware == "BIOS":
-                grubCommand = ['grub-install', '--target=i386-pc', '--bootloader-id', rootName, disk]
+                grubCommand = [
+                    "grub-install",
+                    "--target=i386-pc",
+                    "--bootloader-id",
+                    rootName,
+                    disk,
+                ]
                 add_op(
                     state,
                     server.shell,
                     name="Installing grub in BIOS",
                     commands=[grubCommand],
-                    _sudo=True
+                    _sudo=True,
                 )
             elif firmware == "UEFI":
                 grubCfgPath = f"{bootMount}/grub/grub.cfg"
@@ -62,7 +76,7 @@ def installBootloaderSecure(state, chObolo, firmware):
                     server.shell,
                     name="Installing grub in UEFI",
                     commands=[grubCommand],
-                    _sudo=True
+                    _sudo=True,
                 )
             else:
                 print("Unsupported boot mode.")
@@ -73,10 +87,10 @@ def installBootloaderSecure(state, chObolo, firmware):
                 server.shell,
                 name="Generating grub.cfg",
                 commands=[f"grub-mkconfig -o {bootMount}/grub/grub.cfg"],
-                _sudo=True
+                _sudo=True,
             )
         case "refind":
-            hostname = chObolo.get('hostname', 'charonte')
+            hostname = chObolo.get("hostname", "charonte")
             if not isValidLabel(hostname):
                 print(f"ERROR: Hostname '{hostname}' contains invalid characters.")
                 return
@@ -101,7 +115,7 @@ def installBootloaderSecure(state, chObolo, firmware):
                     server.shell,
                     name="Installing rEFInd in UEFI",
                     commands=[refindCommand],
-                    _sudo=True
+                    _sudo=True,
                 )
                 add_op(
                     state,
@@ -110,12 +124,13 @@ def installBootloaderSecure(state, chObolo, firmware):
                     path=refindCfgPath,
                     content=desiredRefindConf,
                     marker=f"# {{mark}} CH-ARONTE MANAGED BLOCK FOR {hostname}",
-                    _sudo=True
+                    _sudo=True,
                 )
             else:
                 print("Unsupported boot mode for rEFInd.")
         case _:
             print("No supported bootloader specified.")
+
 
 def runBootloader(state, host, choboloPath, skip):
     chObolo = OmegaConf.load(choboloPath)

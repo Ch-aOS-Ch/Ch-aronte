@@ -1,23 +1,25 @@
 #!/usr/bin/env python3
-from omegaconf import OmegaConf
-import yaml
-import subprocess
-from passlib.hash import sha512_crypt
-
 from io import StringIO
 
+import yaml
+from omegaconf import OmegaConf
+from passlib.hash import sha512_crypt
 from pyinfra.api.operation import add_op
-from pyinfra.operations import server, files
 from pyinfra.facts.server import Command
+from pyinfra.operations import files, server
+
 
 def userDelta(host, ChObolo):
     """Get the users to remove"""
     # This gets all non system users
-    if ChObolo.get('users') is None:
+    if ChObolo.get("users") is None:
         return [], []
-    users_raw_str = host.get_fact(Command, "awk -F: '($3>=1000 && $7 ~ /(bash|zsh|fish|sh)$/){print $1}' /etc/passwd")
+    users_raw_str = host.get_fact(
+        Command,
+        "awk -F: '($3>=1000 && $7 ~ /(bash|zsh|fish|sh)$/){print $1}' /etc/passwd",
+    )
     users_raw = users_raw_str.strip().splitlines() if users_raw_str else []
-    users = set(users_raw) - {'nobody'}
+    users = set(users_raw) - {"nobody"}
 
     sysUsers_raw = host.get_fact(Command, "awk -F: '($3<1000){print $1}' /etc/passwd")
     sysUsers = sysUsers_raw.strip().splitlines() if sysUsers_raw else []
@@ -27,25 +29,27 @@ def userDelta(host, ChObolo):
     toRemove = sorted(users - userList)
     return toRemove, sysUsers
 
+
 def getUserPass(decrypted_content: str):
     if not decrypted_content:
         return {}
     try:
         data = yaml.safe_load(decrypted_content)
-        if data and 'user_secrets' in data:
-            return data.get('user_secrets', {})
+        if data and "user_secrets" in data:
+            return data.get("user_secrets", {})
     except yaml.YAMLError as e:
         print(f"WARNING!!!! Could not parse secrets: {e}")
     except Exception as e:
         print(f"WARNING!!!! An unexpected error occurred while parsing secrets: {e}")
     return {}
 
+
 def userLogic(state, toRemove, toAdd, skip, ChObolo, userPass):
     if toRemove or toAdd:
-        print(f"\n--- users to remove ---")
+        print("\n--- users to remove ---")
         for user in toRemove:
             print(user)
-        print(f"\n--- users to add/manage ---")
+        print("\n--- users to add/manage ---")
         for user in toAdd:
             print(user)
         confirm = "y" if skip else input("\nIs This correct (Y/n)? ")
@@ -53,11 +57,7 @@ def userLogic(state, toRemove, toAdd, skip, ChObolo, userPass):
             if toRemove:
                 for user_name in toRemove:
                     add_op(
-                        state,
-                        server.user,
-                        user=user_name,
-                        present=False,
-                        _sudo=True
+                        state, server.user, user=user_name, present=False, _sudo=True
                     )
             if toAdd:
                 filteredUsers = [
@@ -68,40 +68,42 @@ def userLogic(state, toRemove, toAdd, skip, ChObolo, userPass):
 
                 groupsToAdd = set()
                 for user_details in filteredUsers:
-                    if user_details.get('groups'):
-                        for group in user_details.get('groups'):
+                    if user_details.get("groups"):
+                        for group in user_details.get("groups"):
                             groupsToAdd.add(group)
 
                 for group_name in groupsToAdd:
-                    add_op(
-                        state,
-                        server.group,
-                        group=group_name,
-                        _sudo=True
-                    )
+                    add_op(state, server.group, group=group_name, _sudo=True)
 
                 for user_details in filteredUsers:
-                    password=userPass.get(user_details.name, {}).get("password")
+                    password = userPass.get(user_details.name, {}).get("password")
                     if not password:
-                        print(f"IF YOU'RE SEEING THIS MESSAGE, IT MEANS {user_details.name}'S PASSWORD FAILED.\nPLEASE READ THE DOCUMENTATION AS TO HOW TO MANAGE YOUR PASSWORDS.")
+                        print(
+                            f"IF YOU'RE SEEING THIS MESSAGE, IT MEANS {user_details.name}'S PASSWORD FAILED.\nPLEASE READ THE DOCUMENTATION AS TO HOW TO MANAGE YOUR PASSWORDS."
+                        )
                     if password and not password.startswith("$"):
-                        print(f"WARNING! {user_details.name}'s password is not hashed, hashing the password for security...")
+                        print(
+                            f"WARNING! {user_details.name}'s password is not hashed, hashing the password for security..."
+                        )
                         password = sha512_crypt.hash(password)
                     add_op(
                         state,
                         server.user,
                         user=user_details.name,
-                        home=user_details.get('home', f'/home/{user_details.get("name")}'),
+                        home=user_details.get(
+                            "home", f"/home/{user_details.get('name')}"
+                        ),
                         shell=f"/bin/{user_details.get('shell', 'bash')}",
-                        groups=user_details.get('groups'),
+                        groups=user_details.get("groups"),
                         password=password,
-                        _sudo=True
+                        _sudo=True,
                     )
     else:
-        print(f"\nNo users to be managed.")
+        print("\nNo users to be managed.")
+
 
 def manageHostname(state, ChObolo):
-    hostname = ChObolo.get('hostname')
+    hostname = ChObolo.get("hostname")
     if hostname:
         add_op(
             state,
@@ -109,20 +111,25 @@ def manageHostname(state, ChObolo):
             name=f"Set hostname to {hostname}",
             src=StringIO(f"{hostname}\n"),
             dest="/etc/hostname",
-            _sudo=True
+            _sudo=True,
         )
+
 
 def manageSudoAccess(state, host, ChObolo):
     desiredRules = {}
-    if ChObolo.get('users'):
+    if ChObolo.get("users"):
         for user in ChObolo.users:
-            sudoAcc = user.get('sudo')
+            sudoAcc = user.get("sudo")
             if sudoAcc:
-                userRule=f"{user.name} ALL=(ALL:ALL) ALL\n"
-                ruleFile=f"99-charonte-{user.name}"
+                userRule = f"{user.name} ALL=(ALL:ALL) ALL\n"
+                ruleFile = f"99-charonte-{user.name}"
                 desiredRules[ruleFile] = userRule
     try:
-        actualFilesStr = host.get_fact(Command, "find /etc/sudoers.d/ -type f -name '99-charonte-*' -printf '%f\n'", _sudo=True)
+        actualFilesStr = host.get_fact(
+            Command,
+            "find /etc/sudoers.d/ -type f -name '99-charonte-*' -printf '%f\n'",
+            _sudo=True,
+        )
         if actualFilesStr is None:
             actualFiles = []
         else:
@@ -141,7 +148,7 @@ def manageSudoAccess(state, host, ChObolo):
             name=f"Remove old sudo rule {filename}",
             path=f"/etc/sudoers.d/{filename}",
             present=False,
-            _sudo=True
+            _sudo=True,
         )
 
     for filename, content in desiredRules.items():
@@ -155,15 +162,16 @@ def manageSudoAccess(state, host, ChObolo):
             mode="0440",
             user="root",
             group="root",
-            _sudo=True
+            _sudo=True,
         )
         add_op(
             state,
             server.shell,
             name=f"Validate sudo rule {filename}",
             commands=[f"visudo -c -f {rulePath}"],
-            _sudo=True
+            _sudo=True,
         )
+
 
 def run_user_logic(state, host, chobolo_path, skip, *decrypted_secrets_tuple):
     decrypted_secrets = decrypted_secrets_tuple[0] if decrypted_secrets_tuple else ""
@@ -171,9 +179,9 @@ def run_user_logic(state, host, chobolo_path, skip, *decrypted_secrets_tuple):
 
     toRemove, sysUsers = userDelta(host, ChObolo)
     # We manage all users defined in the config, not just new ones.
-    toAdd=[]
-    if ChObolo.get('users'):
-        for user in ChObolo.get('users'):
+    toAdd = []
+    if ChObolo.get("users"):
+        for user in ChObolo.get("users"):
             if user.name not in sysUsers:
                 toAdd.append(user.name)
             else:
@@ -183,4 +191,3 @@ def run_user_logic(state, host, chobolo_path, skip, *decrypted_secrets_tuple):
     manageHostname(state, ChObolo)
     manageSudoAccess(state, host, ChObolo)
     userLogic(state, toRemove, toAdd, skip, ChObolo, userPass)
-

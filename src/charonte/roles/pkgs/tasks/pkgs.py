@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
 import re
 from typing import cast
-from omegaconf import OmegaConf
 
+from omegaconf import OmegaConf
 from pyinfra.api.operation import add_op
-from pyinfra.operations import server
-from pyinfra.facts.server import Command
 from pyinfra.facts.files import Directory
+from pyinfra.facts.server import Command
+from pyinfra.operations import server
+
 
 def validate_input(input: list[str]) -> list[str]:
     output = []
     for i in input:
-        if not re.match(r'^[a-zA-Z0-9_-]+$', i):
+        if not re.match(r"^[a-zA-Z0-9_-]+$", i):
             print(f"Invalid package name: {i}, ignoring.")
             continue
 
         output.append(i)
     return output
+
 
 def checkBootMode(host):
     path = "/sys/firmware/efi/"
@@ -27,36 +29,55 @@ def checkBootMode(host):
         print("System is booted in BIOS mode.")
         return "BIOS"
 
+
 def natPkgLogic(ChObolo, aur_helper_list, native, dependencies, host):
-    pkgs = ChObolo.get('packages', [])
-    necOver = ChObolo.get('baseOverride', [])
-    necessaries = ["linux", "linux-firmware", "linux-headers", "base", "base-devel", "nano", "networkmanager", "openssh", "git", "ansible", "arch-install-scripts", "sops"]
+    pkgs = ChObolo.get("packages", [])
+    necOver = ChObolo.get("baseOverride", [])
+    necessaries = [
+        "linux",
+        "linux-firmware",
+        "linux-headers",
+        "base",
+        "base-devel",
+        "nano",
+        "networkmanager",
+        "openssh",
+        "git",
+        "ansible",
+        "arch-install-scripts",
+        "sops",
+    ]
 
     if necOver:
         necessaries = necOver
 
-    Users = ChObolo.get('users', [])
+    Users = ChObolo.get("users", [])
 
-    basePkgs = list(pkgs + necessaries + [user.shell for user in Users if user and 'shell' in user])
+    basePkgs = list(
+        pkgs + necessaries + [user.shell for user in Users if user and "shell" in user]
+    )
 
     if aur_helper_list:
         basePkgs.extend(aur_helper_list)
 
-    Parts = ChObolo.get('partitioning', [])
-    if Parts and hasattr(Parts, 'partitions'):
-        root_partition = next((p for p in Parts.partitions if p.get('important') == 'root'), None)
+    Parts = ChObolo.get("partitioning", [])
+    if Parts and hasattr(Parts, "partitions"):
+        root_partition = next(
+            (p for p in Parts.partitions if p.get("important") == "root"), None
+        )
         if root_partition and root_partition.get("type") == "btrfs":
             basePkgs.append("btrfs-progs")
 
-        boot_partition = next((p for p in Parts.partitions if p.get('important') == 'boot'), None)
+        boot_partition = next(
+            (p for p in Parts.partitions if p.get("important") == "boot"), None
+        )
         if boot_partition:
             basePkgs.append("dosfstools")
 
-
     Firm = checkBootMode(host)
-    Boot = ChObolo.get('bootloader', [])
+    Boot = ChObolo.get("bootloader", [])
 
-    if Firm and Firm=="UEFI" and Boot and Boot=="grub":
+    if Firm and Firm == "UEFI" and Boot and Boot == "grub":
         basePkgs.append("efibootmgr")
 
     if Boot:
@@ -68,16 +89,18 @@ def natPkgLogic(ChObolo, aur_helper_list, native, dependencies, host):
     toRemoveNative = sorted(set(native) - set(basePkgs))
     return toAddNative, toRemoveNative
 
+
 def aurPkgLogic(ChObolo, aur_helper, aur, aurDependencies, native):
     if aur_helper:
         if aur_helper not in aur and aur_helper not in native:
             aur_helper = None
-    if 'aurPackages' in ChObolo:
-        aurPkgs = ChObolo.get('aurPackages', [])
+    if "aurPackages" in ChObolo:
+        aurPkgs = ChObolo.get("aurPackages", [])
         toRemoveAur = sorted(set(aur) - set(aurPkgs))
         toAddAur = sorted(set(aurPkgs) - set(aur) - set(aurDependencies))
         return toAddAur, toRemoveAur, aur_helper
     return [], [], aur_helper
+
 
 def nativeLogic(state, toAddNative, toRemoveNative, skip):
     """Applies changes to Native packages"""
@@ -99,41 +122,42 @@ def nativeLogic(state, toAddNative, toRemoveNative, skip):
                 # We use server.shell here cause all of the idempotency has already
                 # Been calculated. The use of packages.pacman makes it slower.
                 add_cmd = [
-                    'pacman',
-                    '-S',
-                    '--needed',
-                    '--noconfirm',
-                    '--needed',
-                    '--noprogressbar',
-                    '--asexplicit'
+                    "pacman",
+                    "-S",
+                    "--needed",
+                    "--noconfirm",
+                    "--needed",
+                    "--noprogressbar",
+                    "--asexplicit",
                 ]
                 add_cmd.extend(toAddNative)
                 add_op(
                     state,
                     server.shell,
                     name="Installing packages",
-                    commands=' '.join(add_cmd),
-                    _sudo=True
+                    commands=" ".join(add_cmd),
+                    _sudo=True,
                 )
             if toRemoveNative:
                 # We use server.shell here cause all of the idempotency has already
                 # Been calculated. The use of packages.pacman makes it slower.
                 remove_cmd = [
-                    'pacman',
-                    '-Rcns',
-                    '--noconfirm',
-                    '--noprogressbar',
+                    "pacman",
+                    "-Rcns",
+                    "--noconfirm",
+                    "--noprogressbar",
                 ]
                 remove_cmd.extend(toRemoveNative)
                 add_op(
                     state,
                     server.shell,
                     name="Uninstalling packages",
-                    commands = ' '.join(remove_cmd),
-                    _sudo=True
+                    commands=" ".join(remove_cmd),
+                    _sudo=True,
                 )
     else:
         print("No native packages to be managed.")
+
 
 def aurLogic(state, toAddAur, toRemoveAur, aur_helper, skip):
     """Applies AUR changes"""
@@ -157,38 +181,39 @@ def aurLogic(state, toAddAur, toRemoveAur, aur_helper, skip):
                 # Been calculated.
                 add_command = [
                     aur_helper,
-                    '-S',
-                    '--noconfirm',
-                    '--answerdiff', 'None',
-                    '--answerclean', 'All',
-                    '--removemake'
+                    "-S",
+                    "--noconfirm",
+                    "--answerdiff",
+                    "None",
+                    "--answerclean",
+                    "All",
+                    "--removemake",
                 ]
                 add_command.extend(toAddAur)
                 add_op(
                     state,
                     server.shell,
-                    commands=' '.join(add_command),
+                    commands=" ".join(add_command),
                     name="Instaling AUR packages.",
                 )
             if toRemoveAur:
                 # We use server.shell here cause all of the idempotency has already
                 # Been calculated.
-                remove_command = [
-                    aur_helper,
-                    '-Rns',
-                    '--noconfirm'
-                ]
+                remove_command = [aur_helper, "-Rns", "--noconfirm"]
                 remove_command.extend(toRemoveAur)
                 add_op(
                     state,
                     server.shell,
-                    commands=' '.join(remove_command),
+                    commands=" ".join(remove_command),
                     name="Uninstalling AUR packages.",
                 )
     elif aur_work_to_do and not aur_helper:
-        print("\nThere ARE aur packages to be managed, but you still don't have an AUR helper.\nIf you have declared an AUR helper run python3 main.py aur -e path/to/ch-obolo to manage your aur helpers.\nIf you have an AUR helper, declare it under aurHelpers")
+        print(
+            "\nThere ARE aur packages to be managed, but you still don't have an AUR helper.\nIf you have declared an AUR helper run python3 main.py aur -e path/to/ch-obolo to manage your aur helpers.\nIf you have an AUR helper, declare it under aurHelpers"
+        )
     else:
         print("\nNo AUR packages to be managed.")
+
 
 def run_all_pkg_logic(state, host, chobolo_path, skip):
     """Point of entry for all packages"""
@@ -199,16 +224,23 @@ def run_all_pkg_logic(state, host, chobolo_path, skip):
     dependencies = host.get_fact(Command, "pacman -Qqdn || true").strip().splitlines()
 
     aur = host.get_fact(Command, "pacman -Qqem || true").strip().splitlines()
-    aurDependencies= host.get_fact(Command, "pacman -Qqdm || true").strip().splitlines()
+    aurDependencies = (
+        host.get_fact(Command, "pacman -Qqdm || true").strip().splitlines()
+    )
 
-    aur_helper_list = ChObolo.get('aurHelpers', [])
+    aur_helper_list = ChObolo.get("aurHelpers", [])
     aur_helper = aur_helper_list[0] if aur_helper_list else None
 
-    toAddNative, toRemoveNative = natPkgLogic(ChObolo, aur_helper_list, native, dependencies, host)
-    toAddAur, toRemoveAur, aur_helper = aurPkgLogic(ChObolo, aur_helper, aur, aurDependencies, native)
+    toAddNative, toRemoveNative = natPkgLogic(
+        ChObolo, aur_helper_list, native, dependencies, host
+    )
+    toAddAur, toRemoveAur, aur_helper = aurPkgLogic(
+        ChObolo, aur_helper, aur, aurDependencies, native
+    )
 
     nativeLogic(state, toAddNative, toRemoveNative, skip)
     aurLogic(state, toAddAur, toRemoveAur, aur_helper, skip)
+
 
 def run_nat_logic(state, host, chobolo_path, skip):
     ChObolo = OmegaConf.load(chobolo_path)
@@ -219,14 +251,18 @@ def run_nat_logic(state, host, chobolo_path, skip):
     except Exception:
         native = []
     try:
-        dependencies = host.get_fact(Command, "pacman -Qqdn || true").strip().splitlines()
+        dependencies = (
+            host.get_fact(Command, "pacman -Qqdn || true").strip().splitlines()
+        )
     except Exception:
         dependencies = []
-    aur_helper_list = ChObolo.get('aurHelpers', [])
+    aur_helper_list = ChObolo.get("aurHelpers", [])
 
-
-    toAddNative, toRemoveNative = natPkgLogic(ChObolo, aur_helper_list, native, dependencies, host)
+    toAddNative, toRemoveNative = natPkgLogic(
+        ChObolo, aur_helper_list, native, dependencies, host
+    )
     nativeLogic(state, toAddNative, toRemoveNative, skip)
+
 
 def run_aur_logic(state, host, chobolo_path, skip):
     ChObolo = OmegaConf.load(chobolo_path)
@@ -238,7 +274,9 @@ def run_aur_logic(state, host, chobolo_path, skip):
         aur = []
 
     try:
-        aurDependencies = host.get_fact(Command, "pacman -Qqdm || true").strip().splitlines()
+        aurDependencies = (
+            host.get_fact(Command, "pacman -Qqdm || true").strip().splitlines()
+        )
     except Exception:
         aurDependencies = []
 
@@ -247,8 +285,10 @@ def run_aur_logic(state, host, chobolo_path, skip):
     except Exception:
         native = []
 
-    aur_helper_list = ChObolo.get('aurHelpers', [])
+    aur_helper_list = ChObolo.get("aurHelpers", [])
     aur_helper = aur_helper_list[0] if aur_helper_list else None
 
-    toAddAur, toRemoveAur, aur_helper = aurPkgLogic(ChObolo, aur_helper, aur, aurDependencies, native)
+    toAddAur, toRemoveAur, aur_helper = aurPkgLogic(
+        ChObolo, aur_helper, aur, aurDependencies, native
+    )
     aurLogic(state, toAddAur, toRemoveAur, aur_helper, skip)
