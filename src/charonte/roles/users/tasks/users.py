@@ -1,193 +1,350 @@
-#!/usr/bin/env python3
+import base64
 from io import StringIO
+from typing import Any, Optional
 
-import yaml
-from omegaconf import OmegaConf
+from chaos.lib.args.dataclasses import Delta, ResultPayload
+from chaos.lib.roles.role import Role
 from passlib.hash import sha512_crypt
 from pyinfra.api.operation import add_op
-from pyinfra.facts.server import Command
+from pyinfra.facts.server import Command, Users
 from pyinfra.operations import files, server
 
 
-def userDelta(host, ChObolo):
-    """Get the users to remove"""
-    # This gets all non system users
-    if ChObolo.get("users") is None:
-        return [], []
-    users_raw_str = host.get_fact(
-        Command,
-        "awk -F: '($3>=1000 && $7 ~ /(bash|zsh|fish|sh)$/){print $1}' /etc/passwd",
-    )
-    users_raw = users_raw_str.strip().splitlines() if users_raw_str else []
-    users = set(users_raw) - {"nobody"}
+class BaseUsersRole(Role):
+    """
+    Base class for UsersRole containing the helper functions for context, delta, and plan generation.
+    """
 
-    sysUsers_raw = host.get_fact(Command, "awk -F: '($3<1000){print $1}' /etc/passwd")
-    sysUsers = sysUsers_raw.strip().splitlines() if sysUsers_raw else []
+    def _get_users_context(self, host, context: dict[str, Any]) -> None:
+        all_users = host.get_fact(Users) or {}
 
-    userList = {user.name for user in ChObolo.users}
+        context["existing_users"] = {
+            name
+            for name, info in all_users.items()
+            if info.get("uid", 0) >= 1000 and name != "nobody"
+        }
 
-    toRemove = sorted(users - userList)
-    return toRemove, sysUsers
+        context["system_users"] = {
+            name for name, info in all_users.items() if info.get("uid", 0) < 1000
+        }
 
+        context["all_users_info"] = all_users
 
-def getUserPass(decrypted_content: str):
-    if not decrypted_content:
-        return {}
-    try:
-        data = yaml.safe_load(decrypted_content)
-        if data and "user_secrets" in data:
-            return data.get("user_secrets", {})
-    except yaml.YAMLError as e:
-        print(f"WARNING!!!! Could not parse secrets: {e}")
-    except Exception as e:
-        print(f"WARNING!!!! An unexpected error occurred while parsing secrets: {e}")
-    return {}
+    def _get_sudoers_context(self, host, context: dict[str, Any]) -> None:
+        try:
+            sudo_cmd = r"""for f in /etc/sudoers.d/99-charonte-*; do if [ -f "$f" ]; then echo "${f##*/}|$(base64 < "$f" | tr -d '\n')"; fi; done"""
+            actual_files_output = host.get_fact(
+                Command,
+                sudo_cmd,
+                _sudo=True,
+            )
 
+            managed_sudo_files = {}
 
-def userLogic(state, toRemove, toAdd, skip, ChObolo, userPass):
-    if toRemove or toAdd:
-        print("\n--- users to remove ---")
-        for user in toRemove:
-            print(user)
-        print("\n--- users to add/manage ---")
-        for user in toAdd:
-            print(user)
-        confirm = "y" if skip else input("\nIs This correct (Y/n)? ")
-        if confirm.lower() in ["y", "yes", "", "s", "sim"]:
-            if toRemove:
-                for user_name in toRemove:
-                    add_op(
-                        state, server.user, user=user_name, present=False, _sudo=True
-                    )
-            if toAdd:
-                filteredUsers = [
-                    next((u for u in ChObolo.users if u.name == user_name), None)
-                    for user_name in toAdd
-                ]
-                filteredUsers = [u for u in filteredUsers if u]
+            if actual_files_output:
+                for line in actual_files_output.strip().splitlines():
+                    if "|" in line:
+                        name, b64_content = line.split("|", 1)
+                        try:
+                            managed_sudo_files[name] = base64.b64decode(
+                                b64_content
+                            ).decode("utf-8")
+                        except Exception:
+                            pass
 
-                groupsToAdd = set()
-                for user_details in filteredUsers:
-                    if user_details.get("groups"):
-                        for group in user_details.get("groups"):
-                            groupsToAdd.add(group)
+            context["managed_sudo_files"] = managed_sudo_files
 
-                for group_name in groupsToAdd:
-                    add_op(state, server.group, group=group_name, _sudo=True)
+        except Exception:
+            context["managed_sudo_files"] = {}
 
-                for user_details in filteredUsers:
-                    password = userPass.get(user_details.name, {}).get("password")
-                    if not password:
-                        print(
-                            f"IF YOU'RE SEEING THIS MESSAGE, IT MEANS {user_details.name}'S PASSWORD FAILED.\nPLEASE READ THE DOCUMENTATION AS TO HOW TO MANAGE YOUR PASSWORDS."
-                        )
-                    if password and not password.startswith("$"):
-                        print(
-                            f"WARNING! {user_details.name}'s password is not hashed, hashing the password for security..."
-                        )
-                        password = sha512_crypt.hash(password)
-                    add_op(
-                        state,
-                        server.user,
-                        user=user_details.name,
-                        home=user_details.get(
-                            "home", f"/home/{user_details.get('name')}"
-                        ),
-                        shell=f"/bin/{user_details.get('shell', 'bash')}",
-                        groups=user_details.get("groups"),
-                        password=password,
-                        _sudo=True,
-                    )
-    else:
-        print("\nNo users to be managed.")
+    def _get_shadow_context(self, host, context: dict[str, Any]) -> None:
+        try:
+            shadow_output = host.get_fact(Command, "cat /etc/shadow", _sudo=True)
+            shadow_hashes = {}
 
+            if shadow_output:
+                for line in shadow_output.strip().splitlines():
+                    parts = line.split(":")
+                    if len(parts) >= 2:
+                        shadow_hashes[parts[0]] = parts[1]
 
-def manageHostname(state, ChObolo):
-    hostname = ChObolo.get("hostname")
-    if hostname:
-        add_op(
-            state,
-            files.put,
-            name=f"Set hostname to {hostname}",
-            src=StringIO(f"{hostname}\n"),
-            dest="/etc/hostname",
-            _sudo=True,
-        )
+            context["shadow_hashes"] = shadow_hashes
+        except Exception:
+            context["shadow_hashes"] = {}
 
+    def _compute_users_delta(
+        self,
+        safe_context: dict[str, Any],
+        to_add: dict,
+        to_remove: dict,
+        metadata: dict,
+    ) -> None:
+        chobolo_users = safe_context.get("users") or []
+        user_list_from_chobolo = {user.get("name") for user in chobolo_users}
+        existing_users = safe_context.get("existing_users", set())
+        system_users = safe_context.get("system_users", set())
+        all_users_info = safe_context.get("all_users_info", {})
+        shadow_hashes = safe_context.get("shadow_hashes", {})
+        user_pass = safe_context.get("secrets", {}).get("user_secrets", {})
 
-def manageSudoAccess(state, host, ChObolo):
-    desiredRules = {}
-    if ChObolo.get("users"):
-        for user in ChObolo.users:
-            sudoAcc = user.get("sudo")
-            if sudoAcc:
-                userRule = f"{user.name} ALL=(ALL:ALL) ALL\n"
-                ruleFile = f"99-charonte-{user.name}"
-                desiredRules[ruleFile] = userRule
-    try:
-        actualFilesStr = host.get_fact(
-            Command,
-            "find /etc/sudoers.d/ -type f -name '99-charonte-*' -printf '%f\n'",
-            _sudo=True,
-        )
-        if actualFilesStr is None:
-            actualFiles = []
-        else:
-            actualFiles = actualFilesStr.strip().splitlines()
-    except Exception as e:
-        print(f"WARNING: Not able to list /etc/sudoers.d/. {e}")
-        actualFiles = []
-    managedFiles = set(actualFiles)
-    filesToManage = set(desiredRules.keys())
-    filesToRemove = managedFiles - filesToManage
+        to_remove["users"] = sorted(existing_users - user_list_from_chobolo)
 
-    for filename in filesToRemove:
-        add_op(
-            state,
-            files.file,
-            name=f"Remove old sudo rule {filename}",
-            path=f"/etc/sudoers.d/{filename}",
-            present=False,
-            _sudo=True,
-        )
+        users_for_vitrine = []
+        users_to_enforce = []
 
-    for filename, content in desiredRules.items():
-        rulePath = f"/etc/sudoers.d/{filename}"
-        add_op(
-            state,
-            files.put,
-            name=f"Ensure sudo rule {filename}",
-            src=StringIO(content),
-            dest=rulePath,
-            mode="0440",
-            user="root",
-            group="root",
-            _sudo=True,
-        )
-        add_op(
-            state,
-            server.shell,
-            name=f"Validate sudo rule {filename}",
-            commands=[f"visudo -c -f {rulePath}"],
-            _sudo=True,
-        )
+        for u in chobolo_users:
+            name = u["name"]
+            if name in system_users:
+                continue
 
+            needs_update = False
 
-def run_user_logic(state, host, chobolo_path, skip, *decrypted_secrets_tuple):
-    decrypted_secrets = decrypted_secrets_tuple[0] if decrypted_secrets_tuple else ""
-    ChObolo = OmegaConf.load(chobolo_path)
-
-    toRemove, sysUsers = userDelta(host, ChObolo)
-    # We manage all users defined in the config, not just new ones.
-    toAdd = []
-    if ChObolo.get("users"):
-        for user in ChObolo.get("users"):
-            if user.name not in sysUsers:
-                toAdd.append(user.name)
+            if name not in existing_users:
+                needs_update = True
             else:
-                print(f"cannot manage {user.name}, it is a system user.")
-    userPass = getUserPass(decrypted_secrets)
+                existing_info = all_users_info.get(name, {})
 
-    manageHostname(state, ChObolo)
-    manageSudoAccess(state, host, ChObolo)
-    userLogic(state, toRemove, toAdd, skip, ChObolo, userPass)
+                desired_shell = f"/bin/{u.get('shell', 'bash')}"
+                if existing_info.get("shell") != desired_shell:
+                    needs_update = True
+
+                desired_home = u.get("home", f"/home/{name}")
+                if existing_info.get("home") != desired_home:
+                    needs_update = True
+
+                desired_groups = set(u.get("groups") or [])
+                existing_groups = set(existing_info.get("groups") or [])
+
+                if not desired_groups == existing_groups:
+                    needs_update = True
+
+                password = user_pass.get(name, {}).get("password")
+                if password:
+                    existing_hash = shadow_hashes.get(name)
+                    if not existing_hash:
+                        needs_update = True
+                    elif password.startswith("$"):
+                        if password != existing_hash:
+                            needs_update = True
+                    else:
+                        if existing_hash.startswith("$"):
+                            try:
+                                if not sha512_crypt.verify(password, existing_hash):
+                                    needs_update = True
+                            except ValueError:
+                                needs_update = True
+                        else:
+                            needs_update = True
+
+            if needs_update:
+                users_for_vitrine.append(name)
+                users_to_enforce.append(u)
+
+        to_add["users"] = users_for_vitrine
+
+        metadata["enforce_users"] = users_to_enforce
+
+        metadata["shadow_hashes"] = shadow_hashes
+
+        metadata["user_pass"] = user_pass
+
+    def _compute_sudo_delta(
+        self,
+        safe_context: dict[str, Any],
+        to_add: dict,
+        to_remove: dict,
+        metadata: dict,
+    ) -> None:
+        chobolo_users = safe_context.get("users") or []
+        desired_sudo_rules = {}
+        for user in chobolo_users:
+            if user.get("sudo"):
+                desired_sudo_rules[f"99-charonte-{user['name']}"] = (
+                    f"{user['name']} ALL=(ALL:ALL) ALL\n"
+                )
+
+        managed_sudo_files = safe_context.get("managed_sudo_files", {})
+
+        to_remove["sudo_rules"] = list(
+            set(managed_sudo_files.keys()) - set(desired_sudo_rules.keys())
+        )
+
+        to_enforce_sudo = {}
+        for filename, content in desired_sudo_rules.items():
+            if (
+                filename not in managed_sudo_files
+                or managed_sudo_files[filename] != content
+            ):
+                to_enforce_sudo[filename] = content
+
+        to_add["sudo_rules"] = list(to_enforce_sudo.keys())
+
+        metadata["enforce_sudo_rules"] = to_enforce_sudo
+
+    def _plan_hostname(self, state, host, safe_delta: Delta) -> None:
+        hostname = safe_delta.to_add.get("hostname")
+        if hostname:
+            add_op(
+                state,
+                files.put,
+                name=f"Set hostname to {hostname}",
+                src=StringIO(f"{hostname}\n"),
+                dest="/etc/hostname",
+                _sudo=True,
+            )
+
+    def _plan_sudo_rules(self, state, host, safe_delta: Delta) -> None:
+        sudo_rules_to_remove = safe_delta.to_remove.get("sudo_rules", [])
+        for filename in sudo_rules_to_remove:
+            add_op(
+                state,
+                files.file,
+                name=f"Remove old sudo rule {filename}",
+                path=f"/etc/sudoers.d/{filename}",
+                present=False,
+                _sudo=True,
+            )
+
+        sudo_rules_to_enforce = safe_delta.metadata.get("enforce_sudo_rules", {})
+        for filename, content in sudo_rules_to_enforce.items():
+            tmp_path = f"/tmp/{filename}"
+            final_path = f"/etc/sudoers.d/{filename}"
+
+            add_op(
+                state,
+                files.put,
+                name=f"Upload sudo rule {filename} to temporary location",
+                src=StringIO(content),
+                dest=tmp_path,
+                mode="0440",
+                user="root",
+                group="root",
+                _sudo=True,
+            )
+
+            add_op(
+                state,
+                server.shell,
+                name=f"Validate sudo rule {filename}",
+                commands=[f"visudo -c -f {tmp_path}"],
+                _sudo=True,
+            )
+
+            add_op(
+                state,
+                server.shell,
+                name=f"Deploy validated sudo rule {filename}",
+                commands=[f"mv {tmp_path} {final_path}"],
+                _sudo=True,
+            )
+
+    def _plan_users(self, state, host, safe_delta: Delta, errors: list) -> None:
+        users_to_remove = safe_delta.to_remove.get("users", [])
+        for user_name in users_to_remove:
+            add_op(state, server.user, user=user_name, present=False, _sudo=True)
+
+        user_details_list = safe_delta.metadata.get("enforce_users", [])
+        user_pass = safe_delta.metadata.get("user_pass", {})
+        shadow_hashes = safe_delta.metadata.get("shadow_hashes", {})
+
+        if user_details_list:
+            groups_to_add = {
+                group
+                for user_details in user_details_list
+                for group in user_details.get("groups", [])
+            }
+
+            for group_name in groups_to_add:
+                add_op(state, server.group, group=group_name, present=True, _sudo=True)
+
+            for user_details in user_details_list:
+                username = user_details["name"]
+                password = user_pass.get(username, {}).get("password")
+                if not password:
+                    errors.append(f"NO_PASSWORD_FOR_USER:{username}")
+
+                if password and not password.startswith("$"):
+                    existing_hash = shadow_hashes.get(username)
+                    if existing_hash and existing_hash.startswith("$"):
+                        try:
+                            if sha512_crypt.verify(password, existing_hash):
+                                password = existing_hash
+                            else:
+                                password = sha512_crypt.hash(password)
+                        except ValueError:
+                            password = sha512_crypt.hash(password)
+                    else:
+                        password = sha512_crypt.hash(password)
+
+                add_op(
+                    state,
+                    server.user,
+                    name=f"Manage user {username}",
+                    user=username,
+                    home=user_details.get("home", f"/home/{username}"),
+                    shell=f"/bin/{user_details.get('shell', 'bash')}",
+                    groups=user_details.get("groups"),
+                    password=password,
+                    present=True,
+                    _sudo=True,
+                )
+
+
+class UsersRole(BaseUsersRole):
+    """
+    Manages users, their sudo access, and the system hostname.
+    """
+
+    def __init__(self):
+        super().__init__(
+            "users",
+            needs_secrets=True,
+            necessary_chobolo_keys=["users", "hostname"],
+            necessary_secret_dict_keys=["user_secrets"],
+        )
+
+    def get_context(
+        self,
+        state,
+        host,
+        chobolo: Optional[dict] = None,
+        secrets: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        chobolo = chobolo or {}
+        secrets = secrets or {}
+
+        context = chobolo.copy()
+        context["secrets"] = secrets
+
+        self._get_users_context(host, context)
+        self._get_sudoers_context(host, context)
+        self._get_shadow_context(host, context)
+
+        return context
+
+    def delta(self, context: Optional[dict[str, Any]] = None) -> Delta:
+        safe_context = context if context is not None else {}
+        to_add = {}
+        to_remove = {}
+        metadata = {}
+
+        self._compute_users_delta(safe_context, to_add, to_remove, metadata)
+        self._compute_sudo_delta(safe_context, to_add, to_remove, metadata)
+
+        # Hostname delta
+        hostname = safe_context.get("hostname")
+        if hostname:
+            to_add["hostname"] = hostname
+
+        return Delta(to_add=to_add, to_remove=to_remove, metadata=metadata)
+
+    def plan(self, state, host, delta: Optional[Delta] = None) -> ResultPayload:
+        safe_delta: Delta = delta if delta is not None else Delta()
+
+        errors = []
+
+        self._plan_hostname(state, host, safe_delta)
+        self._plan_sudo_rules(state, host, safe_delta)
+        self._plan_users(state, host, safe_delta, errors)
+
+        return ResultPayload(success=not errors, error=errors, data=delta)

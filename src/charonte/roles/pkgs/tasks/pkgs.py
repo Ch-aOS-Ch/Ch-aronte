@@ -1,294 +1,397 @@
-#!/usr/bin/env python3
 import re
-from typing import cast
+from typing import Any
 
-from omegaconf import OmegaConf
+from chaos.lib.args.dataclasses import Delta, ResultPayload
+from chaos.lib.roles.role import Role
 from pyinfra.api.operation import add_op
 from pyinfra.facts.files import Directory
 from pyinfra.facts.server import Command
 from pyinfra.operations import server
 
 
-def validate_input(input: list[str]) -> list[str]:
-    output = []
-    for i in input:
-        if not re.match(r"^[a-zA-Z0-9_-]+$", i):
-            print(f"Invalid package name: {i}, ignoring.")
-            continue
+class _PkgsBaseRole(Role):
+    """
+    Base class for package management roles, containing common logic.
+    """
 
-        output.append(i)
-    return output
+    @staticmethod
+    def _validate_input(input_list: list[str]) -> tuple[list[str], list[str]]:
+        valid = []
+        invalid = []
+        for i in input_list:
+            if not re.match(r"^[a-zA-Z0-9._+-]+$", i):
+                invalid.append(i)
+                continue
+            valid.append(i)
+        return valid, invalid
 
+    @staticmethod
+    def _check_boot_mode(host) -> str:
+        path = "/sys/firmware/efi/"
+        if host.get_fact(Directory, path=path):
+            return "UEFI"
+        else:
+            return "BIOS"
 
-def checkBootMode(host):
-    path = "/sys/firmware/efi/"
-    if host.get_fact(Directory, path=path):
-        print("System is booted in UEFI mode.")
-        return "UEFI"
-    else:
-        print("System is booted in BIOS mode.")
-        return "BIOS"
+    def _get_native_delta(self, context: dict[str, Any]) -> tuple[list[str], list[str]]:
+        ChObolo = context
+        aur_helper_list = ChObolo.get("aurHelpers", [])
+        native = context.get("native_packages", [])
+        dependencies = context.get("native_dependencies", [])
 
+        pkgs = ChObolo.get("packages", [])
+        necOver = ChObolo.get("baseOverride", [])
+        necessaries = [
+            "linux",
+            "linux-firmware",
+            "linux-headers",
+            "base",
+            "base-devel",
+            "nano",
+            "networkmanager",
+            "openssh",
+            "git",
+            "ansible",
+            "arch-install-scripts",
+            "sops",
+        ]
 
-def natPkgLogic(ChObolo, aur_helper_list, native, dependencies, host):
-    pkgs = ChObolo.get("packages", [])
-    necOver = ChObolo.get("baseOverride", [])
-    necessaries = [
-        "linux",
-        "linux-firmware",
-        "linux-headers",
-        "base",
-        "base-devel",
-        "nano",
-        "networkmanager",
-        "openssh",
-        "git",
-        "ansible",
-        "arch-install-scripts",
-        "sops",
-    ]
+        if necOver:
+            necessaries = necOver
 
-    if necOver:
-        necessaries = necOver
-
-    Users = ChObolo.get("users", [])
-
-    basePkgs = list(
-        pkgs + necessaries + [user.shell for user in Users if user and "shell" in user]
-    )
-
-    if aur_helper_list:
-        basePkgs.extend(aur_helper_list)
-
-    Parts = ChObolo.get("partitioning", [])
-    if Parts and hasattr(Parts, "partitions"):
-        root_partition = next(
-            (p for p in Parts.partitions if p.get("important") == "root"), None
+        Users = ChObolo.get("users", [])
+        basePkgs = list(
+            pkgs
+            + necessaries
+            + [user["shell"] for user in Users if user and "shell" in user]
         )
-        if root_partition and root_partition.get("type") == "btrfs":
-            basePkgs.append("btrfs-progs")
 
-        boot_partition = next(
-            (p for p in Parts.partitions if p.get("important") == "boot"), None
-        )
-        if boot_partition:
-            basePkgs.append("dosfstools")
+        if aur_helper_list:
+            basePkgs.extend(aur_helper_list)
 
-    Firm = checkBootMode(host)
-    Boot = ChObolo.get("bootloader", [])
+        Parts = ChObolo.get("partitioning", {})
+        if Parts and "partitions" in Parts:
+            partitions = Parts.get("partitions", [])
+            root_partition = next(
+                (p for p in partitions if p.get("important") == "root"), None
+            )
+            if root_partition and root_partition.get("type") == "btrfs":
+                basePkgs.append("btrfs-progs")
 
-    if Firm and Firm == "UEFI" and Boot and Boot == "grub":
-        basePkgs.append("efibootmgr")
+            boot_partition = next(
+                (p for p in partitions if p.get("important") == "boot"), None
+            )
+            if boot_partition:
+                basePkgs.append("dosfstools")
 
-    if Boot:
-        basePkgs.append(ChObolo.bootloader)
-    else:
-        basePkgs.append("grub")
+        Firm = context.get("boot_mode")
+        Boot = ChObolo.get("bootloader")
 
-    toAddNative = sorted(set(basePkgs) - set(native) - set(dependencies))
-    toRemoveNative = sorted(set(native) - set(basePkgs))
-    return toAddNative, toRemoveNative
+        if Firm and Firm == "UEFI" and Boot and Boot == "grub":
+            basePkgs.append("efibootmgr")
 
+        if Boot:
+            basePkgs.append(Boot)
+        else:
+            basePkgs.append("grub")
 
-def aurPkgLogic(ChObolo, aur_helper, aur, aurDependencies, native):
-    if aur_helper:
-        if aur_helper not in aur and aur_helper not in native:
-            aur_helper = None
-    if "aurPackages" in ChObolo:
+        toAddNative = sorted(set(basePkgs) - set(native) - set(dependencies))
+        toRemoveNative = sorted(set(native) - set(basePkgs))
+        return toAddNative, toRemoveNative
+
+    def _get_aur_delta(
+        self, context: dict[str, Any]
+    ) -> tuple[list[str], list[str], str | None]:
+        ChObolo = context
+        aur = context.get("aur_packages", [])
+        aurDependencies = context.get("aur_dependencies", [])
+        native = context.get("native_packages", [])
+
+        aur_helper_list = ChObolo.get("aurHelpers", [])
+        aur_helper = aur_helper_list[0] if aur_helper_list else None
+
+        if aur_helper:
+            if aur_helper not in aur and aur_helper not in native:
+                aur_helper = None
+
         aurPkgs = ChObolo.get("aurPackages", [])
-        toRemoveAur = sorted(set(aur) - set(aurPkgs))
-        toAddAur = sorted(set(aurPkgs) - set(aur) - set(aurDependencies))
-        return toAddAur, toRemoveAur, aur_helper
-    return [], [], aur_helper
+        if aurPkgs:
+            toRemoveAur = sorted(set(aur) - set(aurPkgs))
+            toAddAur = sorted(set(aurPkgs) - set(aur) - set(aurDependencies))
+            return toAddAur, toRemoveAur, aur_helper
+        return [], [], aur_helper
+
+    def _plan_native(self, state, delta: Delta) -> list[str]:
+        to_add_native = delta.to_add.get("native", [])
+        to_remove_native = delta.to_remove.get("native", [])
+
+        if not to_add_native and not to_remove_native:
+            return []
+
+        if to_add_native:
+            add_cmd = [
+                "pacman",
+                "-S",
+                "--needed",
+                "--noconfirm",
+                "--noprogressbar",
+                "--asexplicit",
+            ]
+            add_cmd.extend(to_add_native)
+            add_op(
+                state,
+                server.shell,
+                name="Installing native packages",
+                commands=" ".join(add_cmd),
+                _sudo=True,
+            )
+        if to_remove_native:
+            remove_cmd = ["pacman", "-Rcns", "--noconfirm", "--noprogressbar"]
+            remove_cmd.extend(to_remove_native)
+            add_op(
+                state,
+                server.shell,
+                name="Uninstalling native packages",
+                commands=" ".join(remove_cmd),
+                _sudo=True,
+            )
+        return []
+
+    def _plan_aur(self, state, delta: Delta) -> list[str]:
+        to_add_aur = delta.to_add.get("aur", [])
+        to_remove_aur = delta.to_remove.get("aur", [])
+        aur_helper = delta.metadata.get("aur_helper")
+        aur_work_to_do = to_add_aur or to_remove_aur
+
+        if not aur_work_to_do:
+            return []
+
+        if not aur_helper:
+            return ["AUR_HELPER_MISSING"]
+
+        if to_add_aur:
+            add_command = [
+                aur_helper,
+                "-S",
+                "--noconfirm",
+                "--answerdiff",
+                "None",
+                "--answerclean",
+                "All",
+                "--removemake",
+            ]
+            add_command.extend(to_add_aur)
+            add_op(
+                state,
+                server.shell,
+                commands=" ".join(add_command),
+                name="Installing AUR packages.",
+            )
+        if to_remove_aur:
+            remove_command = [aur_helper, "-Rns", "--noconfirm"]
+            remove_command.extend(to_remove_aur)
+            add_op(
+                state,
+                server.shell,
+                commands=" ".join(remove_command),
+                name="Uninstalling AUR packages.",
+            )
+        return []
 
 
-def nativeLogic(state, toAddNative, toRemoveNative, skip):
-    """Applies changes to Native packages"""
-    if toAddNative or toRemoveNative:
-        toAddNative = validate_input(toAddNative)
-        toRemoveNative = validate_input(toRemoveNative)
-        print("\n--- Native packages to Add: ---")
-        for pkg in toAddNative:
-            print(pkg)
+class PkgsNativeRole(_PkgsBaseRole):
+    """
+    Manages native packages for Arch Linux.
+    """
 
-        print("--- Native packages to be removed: ---")
-        for pkg in toRemoveNative:
-            print(pkg)
-
-        confirm = "y" if skip else input("\nIs This correct (Y/n)? ")
-        if confirm.lower() in ["y", "yes", "", "s", "sim"]:
-            print("\nInitiating Native package management...")
-            if toAddNative:
-                # We use server.shell here cause all of the idempotency has already
-                # Been calculated. The use of packages.pacman makes it slower.
-                add_cmd = [
-                    "pacman",
-                    "-S",
-                    "--needed",
-                    "--noconfirm",
-                    "--needed",
-                    "--noprogressbar",
-                    "--asexplicit",
-                ]
-                add_cmd.extend(toAddNative)
-                add_op(
-                    state,
-                    server.shell,
-                    name="Installing packages",
-                    commands=" ".join(add_cmd),
-                    _sudo=True,
-                )
-            if toRemoveNative:
-                # We use server.shell here cause all of the idempotency has already
-                # Been calculated. The use of packages.pacman makes it slower.
-                remove_cmd = [
-                    "pacman",
-                    "-Rcns",
-                    "--noconfirm",
-                    "--noprogressbar",
-                ]
-                remove_cmd.extend(toRemoveNative)
-                add_op(
-                    state,
-                    server.shell,
-                    name="Uninstalling packages",
-                    commands=" ".join(remove_cmd),
-                    _sudo=True,
-                )
-    else:
-        print("No native packages to be managed.")
-
-
-def aurLogic(state, toAddAur, toRemoveAur, aur_helper, skip):
-    """Applies AUR changes"""
-    aur_work_to_do = toAddAur or toRemoveAur
-
-    if aur_work_to_do and aur_helper:
-        toAddAur, toRemoveAur = validate_input(toAddAur), validate_input(toRemoveAur)
-        print("\n--- AUR packages to Remove: ---")
-        for pkg in toRemoveAur:
-            print(pkg)
-
-        print("\n--- AUR packages to Add: ---")
-        for pkg in toAddAur:
-            print(pkg)
-
-        confirmAur = "y" if skip else input("\nIs This correct (Y/n)? ")
-        if confirmAur.lower() in ["y", "yes", "", "s", "sim"]:
-            print("\nInitiating AUR package management...")
-            if toAddAur:
-                # We use server.shell here cause all of the idempotency has already
-                # Been calculated.
-                add_command = [
-                    aur_helper,
-                    "-S",
-                    "--noconfirm",
-                    "--answerdiff",
-                    "None",
-                    "--answerclean",
-                    "All",
-                    "--removemake",
-                ]
-                add_command.extend(toAddAur)
-                add_op(
-                    state,
-                    server.shell,
-                    commands=" ".join(add_command),
-                    name="Instaling AUR packages.",
-                )
-            if toRemoveAur:
-                # We use server.shell here cause all of the idempotency has already
-                # Been calculated.
-                remove_command = [aur_helper, "-Rns", "--noconfirm"]
-                remove_command.extend(toRemoveAur)
-                add_op(
-                    state,
-                    server.shell,
-                    commands=" ".join(remove_command),
-                    name="Uninstalling AUR packages.",
-                )
-    elif aur_work_to_do and not aur_helper:
-        print(
-            "\nThere ARE aur packages to be managed, but you still don't have an AUR helper.\nIf you have declared an AUR helper run python3 main.py aur -e path/to/ch-obolo to manage your aur helpers.\nIf you have an AUR helper, declare it under aurHelpers"
+    def __init__(self):
+        super().__init__(
+            needs_secrets=False,
+            necessary_chobolo_keys=[
+                "packages",
+                "baseOverride",
+                "users",
+                "partitioning",
+                "bootloader",
+                "aurHelpers",
+            ],
         )
-    else:
-        print("\nNo AUR packages to be managed.")
 
+    def get_context(
+        self, state, host, chobolo: dict = {}, secrets: dict[str, Any] = {}
+    ) -> dict[str, Any]:
+        context = chobolo.copy()
+        try:
+            context["native_packages"] = (
+                host.get_fact(Command, "pacman -Qqen || true").strip().splitlines()
+            )
+        except Exception:
+            context["native_packages"] = []
+        try:
+            context["native_dependencies"] = (
+                host.get_fact(Command, "pacman -Qqdn || true").strip().splitlines()
+            )
+        except Exception:
+            context["native_dependencies"] = []
+        context["boot_mode"] = self._check_boot_mode(host)
+        return context
 
-def run_all_pkg_logic(state, host, chobolo_path, skip):
-    """Point of entry for all packages"""
-    ChObolo = OmegaConf.load(chobolo_path)
-    ChObolo = cast(dict, ChObolo)
-
-    native = host.get_fact(Command, "pacman -Qqen || true").strip().splitlines()
-    dependencies = host.get_fact(Command, "pacman -Qqdn || true").strip().splitlines()
-
-    aur = host.get_fact(Command, "pacman -Qqem || true").strip().splitlines()
-    aurDependencies = (
-        host.get_fact(Command, "pacman -Qqdm || true").strip().splitlines()
-    )
-
-    aur_helper_list = ChObolo.get("aurHelpers", [])
-    aur_helper = aur_helper_list[0] if aur_helper_list else None
-
-    toAddNative, toRemoveNative = natPkgLogic(
-        ChObolo, aur_helper_list, native, dependencies, host
-    )
-    toAddAur, toRemoveAur, aur_helper = aurPkgLogic(
-        ChObolo, aur_helper, aur, aurDependencies, native
-    )
-
-    nativeLogic(state, toAddNative, toRemoveNative, skip)
-    aurLogic(state, toAddAur, toRemoveAur, aur_helper, skip)
-
-
-def run_nat_logic(state, host, chobolo_path, skip):
-    ChObolo = OmegaConf.load(chobolo_path)
-    ChObolo = cast(dict, ChObolo)
-
-    try:
-        native = host.get_fact(Command, "pacman -Qqen || true").strip().splitlines()
-    except Exception:
-        native = []
-    try:
-        dependencies = (
-            host.get_fact(Command, "pacman -Qqdn || true").strip().splitlines()
+    def delta(self, state, host, context: dict[str, Any] = {}) -> Delta:
+        to_add_native, to_remove_native = self._get_native_delta(context)
+        valid_add, invalid_add = self._validate_input(to_add_native)
+        valid_remove, invalid_remove = self._validate_input(to_remove_native)
+        return Delta(
+            to_add={"native": valid_add},
+            to_remove={"native": valid_remove},
+            metadata={"invalid_packages": invalid_add + invalid_remove},
         )
-    except Exception:
-        dependencies = []
-    aur_helper_list = ChObolo.get("aurHelpers", [])
 
-    toAddNative, toRemoveNative = natPkgLogic(
-        ChObolo, aur_helper_list, native, dependencies, host
-    )
-    nativeLogic(state, toAddNative, toRemoveNative, skip)
+    def plan(self, state, host, delta: Delta = Delta()) -> ResultPayload:
+        errors = [
+            f"INVALID_PACKAGE_NAME:{pkg}"
+            for pkg in delta.metadata.get("invalid_packages", [])
+        ]
+        errors.extend(self._plan_native(state, delta))
+        return ResultPayload(success=not errors, message=[], error=errors, data=delta)
 
 
-def run_aur_logic(state, host, chobolo_path, skip):
-    ChObolo = OmegaConf.load(chobolo_path)
-    ChObolo = cast(dict, ChObolo)
+class PkgsAurRole(_PkgsBaseRole):
+    """
+    Manages AUR packages for Arch Linux.
+    """
 
-    try:
-        aur = host.get_fact(Command, "pacman -Qqem || true").strip().splitlines()
-    except Exception:
-        aur = []
-
-    try:
-        aurDependencies = (
-            host.get_fact(Command, "pacman -Qqdm || true").strip().splitlines()
+    def __init__(self):
+        super().__init__(
+            needs_secrets=False,
+            necessary_chobolo_keys=["aurPackages", "aurHelpers"],
         )
-    except Exception:
-        aurDependencies = []
 
-    try:
-        native = host.get_fact(Command, "pacman -Qqen || true").strip().splitlines()
-    except Exception:
-        native = []
+    def get_context(
+        self, state, host, chobolo: dict = {}, secrets: dict[str, Any] = {}
+    ) -> dict[str, Any]:
+        context = chobolo.copy()
+        try:
+            context["native_packages"] = (
+                host.get_fact(Command, "pacman -Qqen || true").strip().splitlines()
+            )
+        except Exception:
+            context["native_packages"] = []
+        try:
+            context["aur_packages"] = (
+                host.get_fact(Command, "pacman -Qqem || true").strip().splitlines()
+            )
+        except Exception:
+            context["aur_packages"] = []
+        try:
+            context["aur_dependencies"] = (
+                host.get_fact(Command, "pacman -Qqdm || true").strip().splitlines()
+            )
+        except Exception:
+            context["aur_dependencies"] = []
+        return context
 
-    aur_helper_list = ChObolo.get("aurHelpers", [])
-    aur_helper = aur_helper_list[0] if aur_helper_list else None
+    def delta(self, state, host, context: dict[str, Any] = {}) -> Delta:
+        to_add_aur, to_remove_aur, aur_helper = self._get_aur_delta(context)
+        valid_add, invalid_add = self._validate_input(to_add_aur)
+        valid_remove, invalid_remove = self._validate_input(to_remove_aur)
+        return Delta(
+            to_add={"aur": valid_add},
+            to_remove={"aur": valid_remove},
+            metadata={
+                "aur_helper": aur_helper,
+                "invalid_packages": invalid_add + invalid_remove,
+            },
+        )
 
-    toAddAur, toRemoveAur, aur_helper = aurPkgLogic(
-        ChObolo, aur_helper, aur, aurDependencies, native
-    )
-    aurLogic(state, toAddAur, toRemoveAur, aur_helper, skip)
+    def plan(self, state, host, delta: Delta = Delta()) -> ResultPayload:
+        errors = [
+            f"INVALID_PACKAGE_NAME:{pkg}"
+            for pkg in delta.metadata.get("invalid_packages", [])
+        ]
+        errors.extend(self._plan_aur(state, delta))
+        return ResultPayload(success=not errors, message=[], error=errors, data=delta)
+
+
+class PkgsAllRole(_PkgsBaseRole):
+    """
+    Manages both native and AUR packages for Arch Linux.
+    """
+
+    def __init__(self):
+        super().__init__(
+            needs_secrets=False,
+            necessary_chobolo_keys=[
+                "packages",
+                "baseOverride",
+                "users",
+                "partitioning",
+                "bootloader",
+                "aurPackages",
+                "aurHelpers",
+            ],
+        )
+
+    def get_context(
+        self, state, host, chobolo: dict = {}, secrets: dict[str, Any] = {}
+    ) -> dict[str, Any]:
+        context = chobolo.copy()
+        try:
+            context["native_packages"] = (
+                host.get_fact(Command, "pacman -Qqen || true").strip().splitlines()
+            )
+        except Exception:
+            context["native_packages"] = []
+        try:
+            context["native_dependencies"] = (
+                host.get_fact(Command, "pacman -Qqdn || true").strip().splitlines()
+            )
+        except Exception:
+            context["native_dependencies"] = []
+        try:
+            context["aur_packages"] = (
+                host.get_fact(Command, "pacman -Qqem || true").strip().splitlines()
+            )
+        except Exception:
+            context["aur_packages"] = []
+        try:
+            context["aur_dependencies"] = (
+                host.get_fact(Command, "pacman -Qqdm || true").strip().splitlines()
+            )
+        except Exception:
+            context["aur_dependencies"] = []
+        context["boot_mode"] = self._check_boot_mode(host)
+        return context
+
+    def delta(self, state, host, context: dict[str, Any] = {}) -> Delta:
+        to_add_native, to_remove_native = self._get_native_delta(context)
+        to_add_aur, to_remove_aur, aur_helper = self._get_aur_delta(context)
+
+        valid_add_nat, invalid_add_nat = self._validate_input(to_add_native)
+        valid_remove_nat, invalid_remove_nat = self._validate_input(to_remove_native)
+        valid_add_aur, invalid_add_aur = self._validate_input(to_add_aur)
+        valid_remove_aur, invalid_remove_aur = self._validate_input(to_remove_aur)
+
+        invalid_pkgs = (
+            invalid_add_nat + invalid_remove_nat + invalid_add_aur + invalid_remove_aur
+        )
+
+        return Delta(
+            to_add={
+                "native": valid_add_nat,
+                "aur": valid_add_aur,
+            },
+            to_remove={
+                "native": valid_remove_nat,
+                "aur": valid_remove_aur,
+            },
+            metadata={"aur_helper": aur_helper, "invalid_packages": invalid_pkgs},
+        )
+
+    def plan(self, state, host, delta: Delta = Delta()) -> ResultPayload:
+        errors = [
+            f"INVALID_PACKAGE_NAME:{pkg}"
+            for pkg in delta.metadata.get("invalid_packages", [])
+        ]
+        errors.extend(self._plan_native(state, delta))
+        errors.extend(self._plan_aur(state, delta))
+        return ResultPayload(success=not errors, message=[], error=errors, data=delta)
