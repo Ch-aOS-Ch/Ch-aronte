@@ -12,7 +12,7 @@ from pyinfra.operations import files, server
 class RegionRole(Role):
     def __init__(self):
         super().__init__(
-            name="region",
+            name="Configure System Region Settings",
             needs_secrets=False,
             necessary_chobolo_keys=["region"],
         )

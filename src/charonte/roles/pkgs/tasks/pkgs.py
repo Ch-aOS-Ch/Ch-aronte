@@ -206,6 +206,7 @@ class PkgsNativeRole(_PkgsBaseRole):
 
     def __init__(self):
         super().__init__(
+            name="Install Arch Native Packages",
             needs_secrets=False,
             necessary_chobolo_keys=[
                 "packages",
@@ -262,6 +263,7 @@ class PkgsAurRole(_PkgsBaseRole):
 
     def __init__(self):
         super().__init__(
+            name="Install AUR Packages",
             needs_secrets=False,
             necessary_chobolo_keys=["aurPackages", "aurHelpers"],
         )
@@ -319,6 +321,7 @@ class PkgsAllRole(_PkgsBaseRole):
 
     def __init__(self):
         super().__init__(
+            name="Install All Declared Packages for Arch Linux",
             needs_secrets=False,
             necessary_chobolo_keys=[
                 "packages",

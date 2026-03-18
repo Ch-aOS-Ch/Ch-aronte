@@ -10,7 +10,7 @@ from pyinfra.operations import git, pacman, server
 class AurHelperRole(Role):
     def __init__(self):
         super().__init__(
-            name="aurHelper",
+            name="Install Declared AUR Helpers",
             needs_secrets=False,
             necessary_chobolo_keys=["aurHelpers"],
         )

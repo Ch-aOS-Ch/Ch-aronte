@@ -9,7 +9,7 @@ from pyinfra.operations import server
 class ReflectorRole(Role):
     def __init__(self):
         super().__init__(
-            name="reflector",
+            name="Configure Pacman Mirrors With Reflector",
             needs_secrets=False,
             necessary_chobolo_keys=["mirrors"],
         )

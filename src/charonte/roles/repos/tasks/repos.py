@@ -25,7 +25,7 @@ CheckSpace
 class ReposRole(Role):
     def __init__(self):
         super().__init__(
-            name="repos",
+            name="Configure Pacman Repositories",
             needs_secrets=False,
             necessary_chobolo_keys=["repos"],
         )

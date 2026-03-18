@@ -297,7 +297,7 @@ class UsersRole(BaseUsersRole):
 
     def __init__(self):
         super().__init__(
-            "users",
+            name="Configure users and sudo access",
             needs_secrets=True,
             necessary_chobolo_keys=["users", "hostname"],
             necessary_secret_dict_keys=["user_secrets"],

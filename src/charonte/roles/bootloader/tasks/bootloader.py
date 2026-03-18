@@ -11,7 +11,7 @@ from pyinfra.operations import files, server
 class BootloaderRole(Role):
     def __init__(self):
         super().__init__(
-            name="bootloader",
+            name="Install and Configure Bootloader",
             needs_secrets=False,
             necessary_chobolo_keys=["bootloader", "partitioning", "hostname"],
         )

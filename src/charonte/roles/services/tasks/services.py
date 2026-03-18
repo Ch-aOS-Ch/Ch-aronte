@@ -55,7 +55,7 @@ SERVICES_BLACKLIST = {
 class ServicesRole(Role):
     def __init__(self):
         super().__init__(
-            name="services",
+            name="Set Declared Services to be Enabled and Running",
             needs_secrets=False,
             necessary_chobolo_keys=["services"],
         )
