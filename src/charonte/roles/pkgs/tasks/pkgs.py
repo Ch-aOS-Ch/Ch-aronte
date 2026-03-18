@@ -237,7 +237,7 @@ class PkgsNativeRole(_PkgsBaseRole):
         context["boot_mode"] = self._check_boot_mode(host)
         return context
 
-    def delta(self, state, host, context: dict[str, Any] = {}) -> Delta:
+    def delta(self, state, context: dict[str, Any] = {}) -> Delta:
         to_add_native, to_remove_native = self._get_native_delta(context)
         valid_add, invalid_add = self._validate_input(to_add_native)
         valid_remove, invalid_remove = self._validate_input(to_remove_native)
@@ -292,7 +292,7 @@ class PkgsAurRole(_PkgsBaseRole):
             context["aur_dependencies"] = []
         return context
 
-    def delta(self, state, host, context: dict[str, Any] = {}) -> Delta:
+    def delta(self, state, context: dict[str, Any] = {}) -> Delta:
         to_add_aur, to_remove_aur, aur_helper = self._get_aur_delta(context)
         valid_add, invalid_add = self._validate_input(to_add_aur)
         valid_remove, invalid_remove = self._validate_input(to_remove_aur)
@@ -365,7 +365,7 @@ class PkgsAllRole(_PkgsBaseRole):
         context["boot_mode"] = self._check_boot_mode(host)
         return context
 
-    def delta(self, state, host, context: dict[str, Any] = {}) -> Delta:
+    def delta(self, state, context: dict[str, Any] = {}) -> Delta:
         to_add_native, to_remove_native = self._get_native_delta(context)
         to_add_aur, to_remove_aur, aur_helper = self._get_aur_delta(context)
 
