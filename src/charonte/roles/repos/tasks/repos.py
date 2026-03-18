@@ -1,105 +1,153 @@
 import hashlib
 from io import StringIO
+from typing import Any
 
-from omegaconf import OmegaConf
+from chaos.lib.args.dataclasses import Delta, ResultPayload
+from chaos.lib.roles.role import Role
 from pyinfra.api.operation import add_op
 from pyinfra.facts.files import Sha1File
 from pyinfra.operations import files
 
 PACMAN_OPTIONS_BLOCK = """
 [options]
-HoldPkg     = pacman glibc
-Architecture = auto
+HoldPkg           = pacman glibc
+Architecture      = auto
+ParallelDownloads = 5
+DownloadUser      = alpm
+SigLevel          = Required DatabaseOptional
+LocalFileSigLevel = Optional
 Color
 ILoveCandy
 CheckSpace
-ParallelDownloads = 5
-DownloadUser = alpm
-SigLevel    = Required DatabaseOptional
-LocalFileSigLevel = Optional
 """
 
 
-def isValidRepoField(field):
-    return all(char not in field for char in "\n\r[]")
+class ReposRole(Role):
+    def __init__(self):
+        super().__init__(
+            name="repos",
+            needs_secrets=False,
+            necessary_chobolo_keys=["repos"],
+        )
 
+    @staticmethod
+    def _is_valid_repo_field(field: str) -> bool:
+        return all(char not in field for char in "\n\r[]")
 
-def buildPacmanConfSecure(chObolo):
-    reposCfg = chObolo.get("repos", {})
-    if not reposCfg.get("i_know_exactly_what_im_doing"):
-        pacmanConf = [PACMAN_OPTIONS_BLOCK]
-    else:
-        pacmanConf = [reposCfg.get("i_know_exactly_what_im_doing")]
-    managed = reposCfg.get("managed", {})
-    thirdParty = reposCfg.get("third_party", [])
+    def _build_pacman_conf_secure(self, repos_cfg: dict) -> tuple[str, list[str]]:
+        warnings: list[str] = []
+        pacman_conf: list[str] = []
 
-    if thirdParty:
-        for repo in thirdParty:
-            repoName = repo.get("name")
-            repoUrl = repo.get("url")
-            repoInclude = repo.get("include")
+        custom_conf = repos_cfg.get("i_know_exactly_what_im_doing")
+        if custom_conf:
+            pacman_conf.append(str(custom_conf))
+        else:
+            pacman_conf.append(PACMAN_OPTIONS_BLOCK)
 
-            if not all(
-                isValidRepoField(field)
-                for field in [repoName, repoUrl, repoInclude]
-                if field
-            ):
-                print(
-                    f"WARNING: Repository '{repoName}' contains invalid characters and will be skipped."
+        managed = repos_cfg.get("managed", {})
+        third_party = repos_cfg.get("third_party", [])
+
+        if third_party:
+            for repo in third_party:
+                repo_name = repo.get("name")
+                repo_url = repo.get("url")
+                repo_include = repo.get("include")
+
+                if not all(
+                    self._is_valid_repo_field(field)
+                    for field in [repo_name, repo_url, repo_include]
+                    if field
+                ):
+                    warnings.append(
+                        f"Repository '{repo_name}' contains invalid characters and will be skipped."
+                    )
+                    continue
+
+                if not (repo_url or repo_include):
+                    warnings.append(
+                        f"No url or include path to manage repo {repo_name}. Skipping."
+                    )
+                    continue
+
+                repo_block = [f"\n[{repo_name}]"]
+                if repo_url:
+                    repo_block.append(f"Server = {repo_url}")
+                if repo_include:
+                    repo_block.append(f"Include = {repo_include}")
+                pacman_conf.append("\n".join(repo_block))
+
+        if managed:
+            if managed.get("core", True):
+                pacman_conf.append("\n[core]\nInclude=/etc/pacman.d/mirrorlist")
+
+            if managed.get("extras", False):
+                pacman_conf.append("\n[extra]\nInclude=/etc/pacman.d/mirrorlist")
+                pacman_conf.append("\n[multilib]\nInclude=/etc/pacman.d/mirrorlist")
+
+            if managed.get("unstable", False):
+                pacman_conf.append("\n[core-testing]\nInclude=/etc/pacman.d/mirrorlist")
+                pacman_conf.append(
+                    "\n[extra-testing]\nInclude=/etc/pacman.d/mirrorlist"
                 )
-                continue
-
-            if not (repoUrl or repoInclude):
-                print(
-                    f"WARNING: No url or include path to manage repo {repoName}. Skipping."
+                pacman_conf.append(
+                    "\n[multilib-testing]\nInclude=/etc/pacman.d/mirrorlist"
                 )
-                continue
 
-            repoBlock = [f"\n[{repoName}]"]
-            if repoUrl:
-                repoBlock.append(f"Server = {repoUrl}")
-            if repoInclude:
-                repoBlock.append(f"Include = {repoInclude}")
-            pacmanConf.append("\n".join(repoBlock))
+        return "\n".join(pacman_conf), warnings
 
-    if managed:
-        if managed.get("core", True):
-            pacmanConf.append("\n[core]\nInclude=/etc/pacman.d/mirrorlist")
-        if managed.get("extras", False):
-            pacmanConf.append("\n[extra]\nInclude=/etc/pacman.d/mirrorlist")
-            pacmanConf.append("\n[multilib]\nInclude=/etc/pacman.d/mirrorlist")
-        if managed.get("unstable", False):
-            pacmanConf.append("\n[core-testing]\nInclude=/etc/pacman.d/mirrorlist")
-            pacmanConf.append("\n[extra-testing]\nInclude=/etc/pacman.d/mirrorlist")
-            pacmanConf.append("\n[multilib-testing]\nInclude=/etc/pacman.d/mirrorlist")
+    def get_context(
+        self, state, host, chobolo: dict = {}, secrets: dict[str, Any] = {}
+    ) -> dict[str, Any]:
+        repos_cfg = chobolo.get("repos", {})
+        try:
+            current_hash = host.get_fact(Sha1File, path="/etc/pacman.conf", _sudo=True)
+        except Exception:
+            current_hash = None
 
-    return "\n".join(pacmanConf)
+        return {
+            "repos_cfg": repos_cfg,
+            "current_hash": current_hash,
+        }
 
+    def delta(self, context: dict[str, Any] = {}) -> Delta:
+        repos_cfg = context.get("repos_cfg", {})
+        if not repos_cfg:
+            return Delta()
 
-def run_repo_logic(state, host, choboloPath, skip):
-    chObolo = OmegaConf.load(choboloPath)
+        desired_content, warnings = self._build_pacman_conf_secure(repos_cfg)
+        desired_hash = hashlib.sha1(desired_content.encode("utf-8")).hexdigest()
+        current_hash = context.get("current_hash")
 
-    if not chObolo.get("repos", {}):
-        print("No repos to be managed.")
-        return
+        if desired_hash != current_hash:
+            return Delta(
+                to_add={"pacman.conf": ["Deploy new /etc/pacman.conf"]},
+                metadata={"desired_content": desired_content, "warnings": warnings},
+            )
 
-    desiredContent = buildPacmanConfSecure(chObolo)
-    desiredHash = hashlib.sha1(desiredContent.encode("utf-8")).hexdigest()
-    currentHash = host.get_fact(Sha1File, path="/etc/pacman.conf", _sudo=True)
+        return Delta(metadata={"warnings": warnings})
 
-    if desiredHash != currentHash:
-        print("New pacman.conf to be applied:")
-        print(desiredContent)
-        confirm = "y" if skip else input("\nIs this correct (Y/n)? ")
-        if confirm.lower() in ["y", "yes", "", "s", "sim"]:
+    def plan(self, state, host, delta: Delta = Delta()) -> ResultPayload:
+        desired_content = delta.metadata.get("desired_content")
+        warnings = delta.metadata.get("warnings", [])
+
+        if not desired_content:
+            return ResultPayload(success=True, message=warnings, error=[], data={})
+
+        try:
             add_op(
                 state,
                 files.put,
                 name="Deploy /etc/pacman.conf",
-                src=StringIO(desiredContent),
+                src=StringIO(desired_content),
                 dest="/etc/pacman.conf",
                 _sudo=True,
                 mode="0644",
             )
-    else:
-        print("Desired state is already current state.")
+            return ResultPayload(success=True, message=warnings, error=[], data={})
+        except Exception as e:
+            return ResultPayload(
+                success=False,
+                message=[],
+                error=[f"Error planning repos role: {str(e)}"],
+                data={},
+            )

@@ -7,7 +7,7 @@ name = "ch-aronte"
 version = "0.1.3"
 description = "Core arch roles for the Ch-aOS project suite"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 dependencies = [
     "pyinfra",
     "omegaconf",
@@ -20,16 +20,16 @@ where = ["src"]
 pythonpath = ["src"]
 
 [project.entry-points."chaos.roles"]
-packages     = "charonte.roles.pkgs.tasks.pkgs:run_all_pkg_logic"
-native_packages = "charonte.roles.pkgs.tasks.pkgs:run_nat_logic"
-aur_packages = "charonte.roles.pkgs.tasks.pkgs:run_aur_logic"
-users        = "charonte.roles.users.tasks.users:run_user_logic"
-repositories = "charonte.roles.repos.tasks.repos:run_repo_logic"
-bootloader   = "charonte.roles.bootloader.tasks.bootloader:runBootloader"
-helpers      = "charonte.roles.aurHelper.tasks.helper:run_aur"
-services     = "charonte.roles.services.tasks.services:run_service_logic"
-region       = "charonte.roles.region.tasks.region:run_region_logic"
-reflector    = "charonte.roles.reflector.tasks.reflector:reflectorLogic"
+packages     = "charonte.roles.pkgs.tasks.pkgs:PkgsAllRole"
+native_packages = "charonte.roles.pkgs.tasks.pkgs:PkgsNativeRole"
+aur_packages = "charonte.roles.pkgs.tasks.pkgs:PkgsAurRole"
+users        = "charonte.roles.users.tasks.users:UsersRole"
+repositories = "charonte.roles.repos.tasks.repos:ReposRole"
+bootloader   = "charonte.roles.bootloader.tasks.bootloader:BootloaderRole"
+helpers      = "charonte.roles.aurHelper.tasks.helper:AurHelperRole"
+services     = "charonte.roles.services.tasks.services:ServicesRole"
+region       = "charonte.roles.region.tasks.region:RegionRole"
+reflector    = "charonte.roles.reflector.tasks.reflector:ReflectorRole"
 
 [project.entry-points."chaos.aliases"]
 allPkgs = "packages"

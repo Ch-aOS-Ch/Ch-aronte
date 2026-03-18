@@ -1,4 +1,7 @@
-from omegaconf import OmegaConf
+from typing import Any
+
+from chaos.lib.args.dataclasses import Delta, ResultPayload
+from chaos.lib.roles.role import Role
 from pyinfra.api.operation import add_op
 from pyinfra.facts.server import Command
 from pyinfra.operations import systemd
@@ -49,106 +52,142 @@ SERVICES_BLACKLIST = {
 }
 
 
-def servicesDelta(host, ChObolo):
-    servicesRawStr = host.get_fact(
-        Command,
-        "systemctl list-unit-files --type=service --no-pager --no-legend | awk '{print $1}'",
-    )
-    all_services = set(servicesRawStr.strip().splitlines()) if servicesRawStr else set()
-
-    enabledServicesRawStr = host.get_fact(
-        Command,
-        "systemctl list-unit-files --type=service --state=enabled | grep -Ev 'getty|timesyncd|UNIT|unit' | awk '{print $1}'",
-    )
-    enabledServicesFull = (
-        set(enabledServicesRawStr.strip().splitlines())
-        if enabledServicesRawStr
-        else set()
-    )
-    enabledServices = {
-        s for s in enabledServicesFull if "@." not in s and "initrd" not in s
-    }
-
-    declaredServices = ChObolo.get("services", [])
-
-    expanded_desired_services = set()
-    service_name_to_config = {}
-
-    for serviceConfig in declaredServices:
-        serviceName = serviceConfig.get("name")
-
-        if serviceConfig.get("dense_service", False):
-            for s in all_services:
-                # Filter out template units and initrd services
-                if "@." in s or "initrd" in s:
-                    continue
-                if s.startswith(serviceName):
-                    expanded_desired_services.add(s)
-                    service_name_to_config[s] = serviceConfig
-
-        else:
-            if not serviceName.endswith(".service"):
-                serviceName = f"{serviceName}.service"
-            expanded_desired_services.add(serviceName)
-            service_name_to_config[serviceName] = serviceConfig
-
-    toAdd_names = expanded_desired_services - enabledServices
-    toRemove_names = (enabledServices - expanded_desired_services) - SERVICES_BLACKLIST
-
-    return (
-        sorted(list(toAdd_names)),
-        sorted(list(toRemove_names)),
-        service_name_to_config,
-    )
-
-
-def servicesLogic(state, toAdd, toRemove, config_map):
-    for service_name in toAdd:
-        config = config_map[service_name]
-        sState = config.get("running", True)
-        enabled = config.get("on_boot", True)
-        add_op(
-            state,
-            systemd.service,
-            name=f"Ensure service {service_name} is running={sState} and enabled={enabled}",
-            service=service_name,
-            running=sState,
-            enabled=enabled,
-            _sudo=True,
+class ServicesRole(Role):
+    def __init__(self):
+        super().__init__(
+            name="services",
+            needs_secrets=False,
+            necessary_chobolo_keys=["services"],
         )
 
-    for service_name in toRemove:
-        add_op(
-            state,
-            systemd.service,
-            name=f"Ensure service {service_name} is stopped and disabled",
-            service=service_name,
-            running=False,
-            enabled=False,
-            _sudo=True,
+    def get_context(
+        self, state, host, chobolo: dict = {}, secrets: dict[str, Any] = {}
+    ) -> dict[str, Any]:
+        try:
+            services_raw_str = host.get_fact(
+                Command,
+                "systemctl list-unit-files --type=service --no-pager --no-legend | awk '{print $1}'",
+            )
+            all_services = (
+                set(services_raw_str.strip().splitlines())
+                if services_raw_str
+                else set()
+            )
+
+        except Exception:
+            all_services = set()
+
+        try:
+            enabled_services_raw_str = host.get_fact(
+                Command,
+                "systemctl list-unit-files --type=service --state=enabled | grep -Ev 'getty|timesyncd|UNIT|unit' | awk '{print $1}'",
+            )
+            enabled_services_full = (
+                set(enabled_services_raw_str.strip().splitlines())
+                if enabled_services_raw_str
+                else set()
+            )
+        except Exception:
+            enabled_services_full = set()
+
+        enabled_services = {
+            s for s in enabled_services_full if "@." not in s and "initrd" not in s
+        }
+
+        declared_services = chobolo.get("services", [])
+
+        return {
+            "all_services": list(all_services),
+            "enabled_services": list(enabled_services),
+            "declared_services": declared_services,
+        }
+
+    def delta(self, context: dict[str, Any] = {}) -> Delta:
+        all_services = set(context.get("all_services", []))
+        enabled_services = set(context.get("enabled_services", []))
+        declared_services = context.get("declared_services", [])
+
+        expanded_desired_services = set()
+        service_name_to_config = {}
+
+        for service_config in declared_services:
+            service_name = service_config.get("name")
+            if not service_name:
+                continue
+
+            if service_config.get("dense_service", False):
+                for s in all_services:
+                    # Filter out template units and initrd services
+                    if "@." in s or "initrd" in s:
+                        continue
+                    if s.startswith(service_name):
+                        expanded_desired_services.add(s)
+                        service_name_to_config[s] = service_config
+
+            else:
+                if not service_name.endswith(".service"):
+                    service_name = f"{service_name}.service"
+                expanded_desired_services.add(service_name)
+                service_name_to_config[service_name] = service_config
+
+        to_add_names = expanded_desired_services - enabled_services
+        to_remove_names = (
+            enabled_services - expanded_desired_services
+        ) - SERVICES_BLACKLIST
+
+        to_add = sorted(list(to_add_names))
+        to_remove = sorted(list(to_remove_names))
+
+        delta_to_add = {}
+        if to_add:
+            delta_to_add["services"] = to_add
+
+        delta_to_remove = {}
+        if to_remove:
+            delta_to_remove["services"] = to_remove
+
+        return Delta(
+            to_add=delta_to_add,
+            to_remove=delta_to_remove,
+            metadata={"config_map": service_name_to_config},
         )
 
+    def plan(self, state, host, delta: Delta = Delta()) -> ResultPayload:
+        to_add = delta.to_add.get("services", [])
+        to_remove = delta.to_remove.get("services", [])
+        config_map = delta.metadata.get("config_map", {})
 
-def run_service_logic(state, host, chobolo_path, skip):
-    ChObolo = OmegaConf.load(chobolo_path)
-    toAdd, toRemove, config_map = servicesDelta(host, ChObolo)
-    work_to_do = toAdd or toRemove
+        try:
+            for service_name in to_add:
+                config = config_map.get(service_name, {})
+                s_state = config.get("running", True)
+                enabled = config.get("on_boot", True)
+                add_op(
+                    state,
+                    systemd.service,
+                    name=f"Ensure service {service_name} is running={s_state} and enabled={enabled}",
+                    service=service_name,
+                    running=s_state,
+                    enabled=enabled,
+                    _sudo=True,
+                )
 
-    if work_to_do:
-        if toAdd:
-            print("\n--- Services to converge (add/enable) ---")
-            for s in toAdd:
-                print(s)
-        if toRemove:
-            print("\n--- Services to stop/disable ---")
-            for s in toRemove:
-                print(s)
+            for service_name in to_remove:
+                add_op(
+                    state,
+                    systemd.service,
+                    name=f"Ensure service {service_name} is stopped and disabled",
+                    service=service_name,
+                    running=False,
+                    enabled=False,
+                    _sudo=True,
+                )
 
-        if toAdd or toRemove:
-            confirm = "y" if skip else input("\nIs This correct (Y/n)? ")
-            if confirm.lower() in ["y", "yes", "", "s", "sim"]:
-                servicesLogic(state, toAdd, toRemove, config_map)
-        else:
-            print("Nothing to be done.")
-    else:
-        print("\nAll services are in the desired state.")
+            return ResultPayload(success=True, message=[], error=[], data={})
+        except Exception as e:
+            return ResultPayload(
+                success=False,
+                message=[],
+                error=[f"Error planning services role: {str(e)}"],
+                data={},
+            )
