@@ -51,7 +51,6 @@ class _PkgsBaseRole(Role):
             "networkmanager",
             "openssh",
             "git",
-            "ansible",
             "arch-install-scripts",
             "sops",
         ]
