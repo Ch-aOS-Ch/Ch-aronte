@@ -72,6 +72,14 @@ class BaseUsersRole(Role):
         except Exception:
             context["shadow_hashes"] = {}
 
+    def _get_hostname_context(self, host, context: dict[str, Any]) -> None:
+        try:
+            hostname_output = host.get_fact(Command, "cat /etc/hostname", _sudo=True)
+            if hostname_output:
+                context["current_hostname"] = hostname_output.strip()
+        except Exception:
+            context["current_hostname"] = None
+
     def _compute_users_delta(
         self,
         safe_context: dict[str, Any],
@@ -87,7 +95,9 @@ class BaseUsersRole(Role):
         shadow_hashes = safe_context.get("shadow_hashes", {})
         user_pass = safe_context.get("secrets", {}).get("user_secrets", {})
 
-        to_remove["users"] = sorted(existing_users - user_list_from_chobolo)
+        users_to_remove = sorted(existing_users - user_list_from_chobolo)
+        if users_to_remove:
+            to_remove["users"] = users_to_remove
 
         users_for_vitrine = []
         users_to_enforce = []
@@ -140,7 +150,8 @@ class BaseUsersRole(Role):
                 users_for_vitrine.append(name)
                 users_to_enforce.append(u)
 
-        to_add["users"] = users_for_vitrine
+        if users_for_vitrine:
+            to_add["users"] = users_for_vitrine
 
         metadata["enforce_users"] = users_to_enforce
 
@@ -165,9 +176,11 @@ class BaseUsersRole(Role):
 
         managed_sudo_files = safe_context.get("managed_sudo_files", {})
 
-        to_remove["sudo_rules"] = list(
+        sudo_to_remove = list(
             set(managed_sudo_files.keys()) - set(desired_sudo_rules.keys())
         )
+        if sudo_to_remove:
+            to_remove["sudo_rules"] = sudo_to_remove
 
         to_enforce_sudo = {}
         for filename, content in desired_sudo_rules.items():
@@ -177,7 +190,8 @@ class BaseUsersRole(Role):
             ):
                 to_enforce_sudo[filename] = content
 
-        to_add["sudo_rules"] = list(to_enforce_sudo.keys())
+        if to_enforce_sudo:
+            to_add["sudo_rules"] = list(to_enforce_sudo.keys())
 
         metadata["enforce_sudo_rules"] = to_enforce_sudo
 
@@ -319,6 +333,7 @@ class UsersRole(BaseUsersRole):
         self._get_users_context(host, context)
         self._get_sudoers_context(host, context)
         self._get_shadow_context(host, context)
+        self._get_hostname_context(host, context)
 
         return context
 
@@ -333,7 +348,8 @@ class UsersRole(BaseUsersRole):
 
         # Hostname delta
         hostname = safe_context.get("hostname")
-        if hostname:
+        current_hostname = safe_context.get("current_hostname")
+        if hostname != current_hostname and hostname is not None:
             to_add["hostname"] = hostname
 
         return Delta(to_add=to_add, to_remove=to_remove, metadata=metadata)
@@ -347,4 +363,4 @@ class UsersRole(BaseUsersRole):
         self._plan_sudo_rules(state, host, safe_delta)
         self._plan_users(state, host, safe_delta, errors)
 
-        return ResultPayload(success=not errors, error=errors, data=delta)
+        return ResultPayload(success=not errors, error=errors, data=safe_delta)

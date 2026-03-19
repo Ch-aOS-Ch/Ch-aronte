@@ -237,13 +237,24 @@ class PkgsNativeRole(_PkgsBaseRole):
         context["boot_mode"] = self._check_boot_mode(host)
         return context
 
-    def delta(self, context: dict[str, Any] = {}) -> Delta:
-        to_add_native, to_remove_native = self._get_native_delta(context)
+    def delta(self, context: dict[str, Any] | None = None) -> Delta:
+        safe_context = context if context is not None else {}
+        to_add_native, to_remove_native = self._get_native_delta(safe_context)
         valid_add, invalid_add = self._validate_input(to_add_native)
         valid_remove, invalid_remove = self._validate_input(to_remove_native)
+
+        to_add = {}
+        to_remove = {}
+
+        if valid_add:
+            to_add["native"] = valid_add
+
+        if valid_remove:
+            to_remove["native"] = valid_remove
+
         return Delta(
-            to_add={"native": valid_add},
-            to_remove={"native": valid_remove},
+            to_add=to_add,
+            to_remove=to_remove,
             metadata={"invalid_packages": invalid_add + invalid_remove},
         )
 
@@ -296,9 +307,18 @@ class PkgsAurRole(_PkgsBaseRole):
         to_add_aur, to_remove_aur, aur_helper = self._get_aur_delta(context)
         valid_add, invalid_add = self._validate_input(to_add_aur)
         valid_remove, invalid_remove = self._validate_input(to_remove_aur)
+
+        to_add = {}
+        to_remove = {}
+        if valid_add:
+            to_add["aur"] = valid_add
+
+        if valid_remove:
+            to_remove["aur"] = valid_remove
+
         return Delta(
-            to_add={"aur": valid_add},
-            to_remove={"aur": valid_remove},
+            to_add=to_add,
+            to_remove=to_remove,
             metadata={
                 "aur_helper": aur_helper,
                 "invalid_packages": invalid_add + invalid_remove,
@@ -365,9 +385,11 @@ class PkgsAllRole(_PkgsBaseRole):
         context["boot_mode"] = self._check_boot_mode(host)
         return context
 
-    def delta(self, context: dict[str, Any] = {}) -> Delta:
-        to_add_native, to_remove_native = self._get_native_delta(context)
-        to_add_aur, to_remove_aur, aur_helper = self._get_aur_delta(context)
+    def delta(self, context: dict[str, Any] | None = None) -> Delta:
+        safe_context = context if context is not None else {}
+
+        to_add_native, to_remove_native = self._get_native_delta(safe_context)
+        to_add_aur, to_remove_aur, aur_helper = self._get_aur_delta(safe_context)
 
         valid_add_nat, invalid_add_nat = self._validate_input(to_add_native)
         valid_remove_nat, invalid_remove_nat = self._validate_input(to_remove_native)
@@ -378,15 +400,24 @@ class PkgsAllRole(_PkgsBaseRole):
             invalid_add_nat + invalid_remove_nat + invalid_add_aur + invalid_remove_aur
         )
 
+        to_add = {}
+        to_remove = {}
+
+        if valid_add_nat:
+            to_add["native"] = valid_add_nat
+
+        if valid_add_aur:
+            to_add["aur"] = valid_add_aur
+
+        if valid_remove_nat:
+            to_remove["native"] = valid_remove_nat
+
+        if valid_remove_aur:
+            to_remove["aur"] = valid_remove_aur
+
         return Delta(
-            to_add={
-                "native": valid_add_nat,
-                "aur": valid_add_aur,
-            },
-            to_remove={
-                "native": valid_remove_nat,
-                "aur": valid_remove_aur,
-            },
+            to_add=to_add,
+            to_remove=to_remove,
             metadata={"aur_helper": aur_helper, "invalid_packages": invalid_pkgs},
         )
 
